@@ -20,6 +20,10 @@ mutaciones hacen una sola llamada y actualizan el estado recibido. Si editás
 la planilla directamente mientras la app está abierta, usá **Actualizar datos**
 antes de seguir trabajando para traer esos cambios sin pisarlos.
 
+La pantalla **Material** genera PDFs A4 en la carpeta de Drive `Deutsch - Material`.
+La primera generación solicita permisos para Documentos y Drive; ejecutá
+**Deutsch → Preparar hoja** una vez para aplicar la columna `Incluida en PDF`.
+
 ## IA con Gemini
 
 Creá una API key en Google AI Studio y guardala como `GEMINI_API_KEY` en las

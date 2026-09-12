@@ -71,6 +71,26 @@ const fiveThousand = Array.from({length: 5000}, (_, i) => i);
 assert.equal(paginate(fiveThousand, 200).items.length, 25);
 assert.equal(paginate(fiveThousand, 201).items.length, 25);
 
+const updateSessionRows = Function(
+  'const PAGE_SIZE = 25;\n' +
+  'var state = {collectionPage: 2};\n' +
+  'var player = {index: 0, uiIndex: 0};\n' +
+  'var renders = 0;\n' +
+  'function renderCollections() { renders++; }\n' +
+  'function replaceSessionRow_() {}\n' +
+  'var document = {querySelector() { return null; }};\n' +
+  between(html, '  function updateSessionRows_(scrollActive) {', '\n\n  function redrawSessionRows_') +
+  '\nreturn {run: updateSessionRows_, state, player, renders: () => renders};'
+)();
+updateSessionRows.run(false);
+assert.equal(updateSessionRows.state.collectionPage, 2);
+assert.equal(updateSessionRows.renders(), 0);
+updateSessionRows.state.collectionPage = 1;
+updateSessionRows.player.index = 25;
+updateSessionRows.run(true);
+assert.equal(updateSessionRows.state.collectionPage, 2);
+assert.equal(updateSessionRows.renders(), 1);
+
 const assertPhraseVersion = Function(
   "const COL = { UPDATED: 8 };\n" +
   "function normalize_(value) { return String(value == null ? '' : value).trim(); }\n" +

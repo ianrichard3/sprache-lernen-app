@@ -65,6 +65,7 @@
   .manage-item p { margin:3px 0 0; color:var(--muted); }
   .manage-meta { display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
   .tag { border:1px solid var(--rule); border-radius:999px; color:var(--muted); padding:1px 7px; font-size:11px; }
+  .print-status { display:flex; align-items:center; gap:5px; margin:0 4px 0 0; color:var(--muted); font-size:11px; font-weight:600; letter-spacing:0; text-transform:none; }
   .manage-side { display:grid; gap:20px; }
   .form-panel,.import-panel { padding:16px; }
   .field { margin-bottom:12px; }
@@ -92,6 +93,22 @@
   .collection-row-actions { display:flex; gap:3px; margin-left:auto; }
   .collection-picker { display:grid; gap:6px; max-height:180px; overflow:auto; padding:8px; border:1px solid var(--rule); border-radius:6px; }
   .collection-picker label { display:flex; align-items:center; gap:7px; margin:0; color:var(--ink); font-size:13px; font-weight:400; letter-spacing:0; text-transform:none; }
+  .print-grid { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:20px; align-items:start; }
+  .print-panel { padding:16px; }
+  .print-options { display:grid; gap:8px; }
+  .print-option,.print-collection-row { display:flex; align-items:center; gap:8px; margin:0; color:var(--ink); font-size:14px; font-weight:400; letter-spacing:0; text-transform:none; }
+  .print-option input,.print-collection-row input { width:auto; }
+  .print-collection-list { overflow:hidden; margin-top:10px; }
+  .print-collection-row { padding:10px 12px; border-bottom:1px solid var(--rule); }
+  .print-collection-row:last-child { border-bottom:0; }
+  .print-collection-row span:first-of-type { flex:1; }
+  .print-order-list { display:grid; gap:6px; margin-top:10px; }
+  .print-order-row { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--rule); border-radius:6px; background:var(--paper); }
+  .print-order-row span { flex:1; }
+  .print-order-actions { display:flex; gap:3px; }
+  .print-summary { margin:14px 0; padding:10px; border-radius:6px; background:var(--surface); color:var(--muted); }
+  .print-result { margin-top:16px; padding:12px; border:1px solid var(--rule); border-radius:7px; background:var(--good-soft); color:var(--good); }
+  .print-result a { display:inline-block; margin-top:5px; color:inherit; font-weight:700; }
   .session-layout { display:grid; grid-template-columns:270px minmax(0,1fr); gap:20px; align-items:start; }
   .session-controls { position:sticky; top:16px; padding:14px; text-align:left; }
   .session-controls.collapsed .session-control-body { display:none; }
@@ -122,7 +139,7 @@
   #note.show { display:block; }
   #note.ok { background:var(--good-soft); color:var(--good); }
   #note.err { background:#fdecea; color:var(--danger); }
-  @media (max-width:760px) { .topbar { padding:10px 14px; flex-wrap:wrap; gap:8px; } .screen { padding:14px; } .manage-grid,.collection-editor,.session-layout { grid-template-columns:1fr; } .manage-side { order:-1; } .history-list { max-height:none; } .study-card { margin:8px 0; padding:22px 16px; } .collection-player { margin:8px 0; } .study-list-panel { padding-bottom:66px; } .study-random { position:fixed; right:14px; bottom:14px; left:14px; z-index:1; } .player-settings { grid-template-columns:1fr; } .session-controls { top:0; z-index:2; margin:0 -14px; border-width:0 0 1px; border-radius:0; } .session-controls.collapsed { padding:8px 14px; } .session-layout { gap:12px; } .session-list-head { align-items:flex-start; } .session-language-actions { max-width:190px; } .session-choice { min-height:72px; } .session-row-play { min-width:82px; } }
+  @media (max-width:760px) { .topbar { padding:10px 14px; flex-wrap:wrap; gap:8px; } .screen { padding:14px; } .manage-grid,.collection-editor,.session-layout,.print-grid { grid-template-columns:1fr; } .manage-side { order:-1; } .history-list { max-height:none; } .study-card { margin:8px 0; padding:22px 16px; } .collection-player { margin:8px 0; } .study-list-panel { padding-bottom:66px; } .study-random { position:fixed; right:14px; bottom:14px; left:14px; z-index:1; } .player-settings { grid-template-columns:1fr; } .session-controls { top:0; z-index:2; margin:0 -14px; border-width:0 0 1px; border-radius:0; } .session-controls.collapsed { padding:8px 14px; } .session-layout { gap:12px; } .session-list-head { align-items:flex-start; } .session-language-actions { max-width:190px; } .session-choice { min-height:72px; } .session-row-play { min-width:82px; } }
 </style>
 </head>
 <body>
@@ -133,6 +150,7 @@
       <button class="nav" data-act="switch-view" data-view="study">Estudiar</button>
       <button class="nav" data-act="switch-view" data-view="collections">Colecciones</button>
       <button class="nav" data-act="switch-view" data-view="manage">Gestionar</button>
+      <button class="nav" data-act="switch-view" data-view="print">Material</button>
       <button class="nav" data-act="switch-view" data-view="etymology">Etimología</button>
     </nav>
     <button class="link" data-act="refresh-data">Actualizar datos</button>
@@ -151,6 +169,7 @@
     importPreview: null, importHasHeader: true, importDelimiter: ',',
     etymologyText: '', etymologyResult: '',
     collections: [], memberIdsByCollection: {}, collectionsLoaded: false, collectionQuery: '', collectionId: null, collection: null, collectionEditor: null, collectionPhraseQuery: '', collectionPage: 1, collectionEditorPage: 1, collectionCandidatePage: 1, collectionSelection: {}, collectionPhraseDraft: false,
+    printScope: 'all', printCollectionIds: [], printOnlyUnprinted: false, printOrder: 'manual', printGenerating: false, printResult: null,
     session: { phase:'free', order:'manual', items:[], supports:{ german:true, spanish:false }, controlsOpen:true, revealedIndex:null },
     playerSettings: playerSettings_()
   };
@@ -160,6 +179,7 @@
     app: document.getElementById('app'), screen: document.getElementById('screen'),
     note: document.getElementById('note')
   };
+  var ALL_COLLECTION_ID = '__all__';
 
   function collectionKey_(id) { return String(id || '').toUpperCase(); }
 
@@ -224,6 +244,9 @@
   }
 
   function localCollection_(id) {
+    if (collectionKey_(id) === collectionKey_(ALL_COLLECTION_ID)) {
+      return { collection:{ id:ALL_COLLECTION_ID, name:'Todas', count:state.items.length, all:true }, items:state.items.slice() };
+    }
     var collection = collectionById_(id);
     if (!collection) return null;
     var assigned = assignedPhraseIds_();
@@ -252,6 +275,9 @@
       }
     });
     state.collectionsLoaded = true;
+    state.printCollectionIds = state.printCollectionIds.filter(function (id) {
+      return collectionKey_(id) === collectionKey_('__unassigned__') || !!collectionById_(id);
+    });
     decorateCollections_();
     if (state.editing && byId(state.editing)) state.editingCollectionIds = collectionIdsForPhrase_(state.editing);
     if (state.collectionId) state.collection = localCollection_(state.collectionId);
@@ -368,7 +394,7 @@
 
   function updateSessionRows_(scrollActive) {
     var activePage = Math.floor(player.index / PAGE_SIZE) + 1;
-    if (state.collectionPage !== activePage) {
+    if (state.collectionPage !== activePage && scrollActive) {
       state.collectionPage = activePage;
       return renderCollections();
     }
@@ -778,6 +804,7 @@
       return '<article class="manage-item"><h3>' + esc(item.de) + '</h3><p>' + esc(item.es || 'Sin traducción') + '</p>' +
         (item.notes ? '<p class="hint">' + esc(item.notes) + '</p>' : '') + '<div class="manage-meta">' +
         item.tags.map(function (tag) { return '<span class="tag">#' + esc(tag) + '</span>'; }).join('') +
+        '<label class="print-status"><input type="checkbox" data-print-status data-id="' + esc(item.id) + '"' + (item.printedAt ? ' checked' : '') + '> Incluida en PDF</label>' +
         '<span class="muted">' + esc(item.id) + '</span><span style="flex:1"></span><button class="link" data-act="edit" data-id="' + esc(item.id) + '">Editar</button>' +
         '<button class="link danger" data-act="delete" data-id="' + esc(item.id) + '">Borrar</button></div></article>';
     }).join('') + paginationHtml('manage', page);
@@ -794,10 +821,160 @@
       '<aside class="manage-side">' + editorHtml() + importHtml() + '</aside></div>';
   }
 
+  function printableCollections_() {
+    return state.collections.slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+  }
+
+  function printCollectionSelected_(id) {
+    return state.printCollectionIds.some(function (selectedId) { return collectionKey_(selectedId) === collectionKey_(id); });
+  }
+
+  function printEstimate_() {
+    var items = state.printScope === 'all' ? state.items.slice() : [];
+    var unique = {};
+    var rows = 0;
+    if (state.printScope === 'all') {
+      items.forEach(function (item) {
+        if (!state.printOnlyUnprinted || !item.printedAt) unique[collectionKey_(item.id)] = true;
+      });
+      rows = Object.keys(unique).length;
+    } else {
+      state.printCollectionIds.forEach(function (id) {
+        var collection = localCollection_(id);
+        if (!collection) return;
+        collection.items.forEach(function (item) {
+          if (state.printOnlyUnprinted && item.printedAt) return;
+          rows++;
+          unique[collectionKey_(item.id)] = true;
+        });
+      });
+    }
+    return { rows:rows, unique:Object.keys(unique).length };
+  }
+
+  function printCollectionOptionsHtml_() {
+    var disabled = state.printGenerating ? ' disabled' : '';
+    var options = printableCollections_().map(function (collection) {
+      return '<label class="print-collection-row"><input type="checkbox" data-print-collection value="' + esc(collection.id) + '"' + disabled +
+        (printCollectionSelected_(collection.id) ? ' checked' : '') + '><span>' + esc(collection.name) + '</span><span class="muted">' + collection.count + '</span></label>';
+    }).join('');
+    return options || '<div class="empty">Todavía no hay colecciones.</div>';
+  }
+
+  function printOrderHtml_() {
+    var disabled = state.printGenerating ? ' disabled' : '';
+    return state.printCollectionIds.map(function (id, index) {
+      var collection = collectionById_(id);
+      if (!collection && collectionKey_(id) === collectionKey_('__unassigned__')) collection = { name:'Sin colección' };
+      return '<div class="print-order-row"><span>' + esc(collection ? collection.name : id) + '</span><div class="print-order-actions">' +
+        '<button class="link" data-act="move-print-collection" data-index="' + index + '" data-direction="-1"' + disabled + (index ? '' : ' disabled') + '>↑</button>' +
+        '<button class="link" data-act="move-print-collection" data-index="' + index + '" data-direction="1"' + disabled + (index === state.printCollectionIds.length - 1 ? ' disabled' : '') + '>↓</button></div></div>';
+    }).join('') || '<div class="empty">Elegí al menos una colección.</div>';
+  }
+
+  function printSummaryHtml_() {
+    var estimate = printEstimate_();
+    if (!estimate.unique) return '<div class="print-summary">No hay frases que coincidan con esta selección.</div>';
+    return '<div class="print-summary">' + estimate.unique + ' frases distintas' +
+      (estimate.rows !== estimate.unique ? ' · ' + estimate.rows + ' filas por repeticiones entre colecciones' : '') + '</div>';
+  }
+
+  function renderPrint() {
+    var collections = state.printScope === 'collections';
+    var result = state.printResult;
+    var estimate = printEstimate_();
+    var buttonLabel = state.printGenerating ? 'Generando PDF…' : 'Generar PDF';
+    var disabled = state.printGenerating ? ' disabled' : '';
+    el.screen.innerHTML = '<div class="print-grid"><section class="panel print-panel"><div class="section-head"><h1 class="section-title">Material de estudio</h1></div>' +
+      '<p class="hint">Generá un PDF con frases en alemán y español para estudiar fuera de la app.</p>' +
+      '<div class="field"><label>Qué incluir</label><div class="print-options">' +
+      '<label class="print-option"><input type="radio" name="print-scope" value="all"' + disabled + (state.printScope === 'all' ? ' checked' : '') + '> Todas las frases</label>' +
+      '<label class="print-option"><input type="radio" name="print-scope" value="collections"' + disabled + (collections ? ' checked' : '') + '> Colecciones seleccionadas</label></div></div>' +
+      (collections ? '<div class="section-head"><h2 class="section-title">Colecciones</h2><span><button class="link" data-act="select-all-print-collections"' + disabled + '>Todas</button><button class="link" data-act="clear-print-collections"' + disabled + '>Limpiar</button></span></div><div class="card print-collection-list">' + printCollectionOptionsHtml_() + '</div><h2 class="section-title" style="margin-top:18px">Orden de colecciones</h2><p class="hint">Este orden sólo se aplica a este PDF.</p><div class="print-order-list">' + printOrderHtml_() + '</div>' : '') +
+      '<div class="field" style="margin-top:18px"><label for="print-order">Orden de frases</label><select id="print-order"' + disabled + '><option value="manual"' + (state.printOrder === 'manual' ? ' selected' : '') + '>Orden actual</option><option value="random"' + (state.printOrder === 'random' ? ' selected' : '') + '>Aleatorio</option></select></div>' +
+      '<label class="print-option"><input id="print-only-unprinted" type="checkbox"' + disabled + (state.printOnlyUnprinted ? ' checked' : '') + '> Sólo frases no incluidas en PDF</label>' +
+      printSummaryHtml_() + '<button class="primary" data-act="generate-pdf"' + (state.printGenerating || !estimate.unique ? ' disabled' : '') + '>' + buttonLabel + '</button>' +
+      (result ? '<div class="print-result">PDF listo: ' + result.includedCount + ' frases distintas' + (result.rowCount !== result.includedCount ? ' · ' + result.rowCount + ' filas' : '') + '.<br><a href="' + esc(result.url) + '" target="_blank" rel="noopener">Abrir ' + esc(result.name) + '</a></div>' : '') +
+      '</section><aside class="panel print-panel"><h2 class="section-title">Cómo funciona</h2><p class="hint">Cada colección aparece en su propio bloque con una tabla de dos columnas. Las frases sin traducción quedan con la celda española vacía.</p><p class="hint">Al generarlo, las frases incluidas quedan marcadas con la fecha de generación. Podés corregir esa marca desde Gestionar.</p></aside></div>';
+  }
+
+  function selectAllPrintCollections_() {
+    if (state.printGenerating) return;
+    state.printCollectionIds = printableCollections_().map(function (collection) { return collection.id; });
+    state.printResult = null;
+    renderPrint();
+  }
+
+  function clearPrintCollections_() {
+    if (state.printGenerating) return;
+    state.printCollectionIds = [];
+    state.printResult = null;
+    renderPrint();
+  }
+
+  function movePrintCollection_(index, direction) {
+    if (state.printGenerating) return;
+    var next = index + direction;
+    if (index < 0 || next < 0 || next >= state.printCollectionIds.length) return;
+    var moved = state.printCollectionIds[index];
+    state.printCollectionIds[index] = state.printCollectionIds[next];
+    state.printCollectionIds[next] = moved;
+    state.printResult = null;
+    renderPrint();
+  }
+
+  function setPrintStatus_(id, printed) {
+    var item = byId(id);
+    if (!item) return;
+    google.script.run.withSuccessHandler(function (updated) {
+      var current = byId(updated.id);
+      if (current) {
+        current.printedAt = updated.printedAt;
+        current.updated = updated.updated;
+      }
+      renderManageList();
+      say(printed ? 'Frase marcada como incluida.' : 'Marca de PDF quitada.');
+    }).withFailureHandler(function (err) {
+      renderManageList();
+      say(err.message, 'err');
+    }).setPhrasePrinted({ id:id, printed:printed, expectedUpdated:item.updated });
+  }
+
+  function generatePrintPdf_() {
+    var estimate = printEstimate_();
+    if (!estimate.unique || state.printGenerating) return;
+    var payload = {
+      scope:state.printScope,
+      collectionIds:state.printCollectionIds.slice(),
+      onlyUnprinted:state.printOnlyUnprinted,
+      order:state.printOrder
+    };
+    var popup = null;
+    try { popup = window.open('', '_blank'); } catch (err) {}
+    state.printGenerating = true;
+    state.printResult = null;
+    renderPrint();
+    google.script.run.withSuccessHandler(function (result) {
+      state.printGenerating = false;
+      state.printResult = result;
+      render();
+      if (popup) popup.location.href = result.url;
+      reload(function () {
+        render();
+        say('PDF generado y frases marcadas.');
+      });
+    }).withFailureHandler(function (err) {
+      state.printGenerating = false;
+      render();
+      if (popup) popup.close();
+      say(err.message, 'err');
+    }).generatePhrasePdf(payload);
+  }
+
   function collectionCatalogHtml() {
     if (!state.collectionsLoaded) return '<div class="empty">Cargando colecciones…</div>';
     var query = String(state.collectionQuery || '').toLowerCase();
-    var collections = state.collections.filter(function (collection) {
+    var collections = [{ id:ALL_COLLECTION_ID, name:'Todas', count:state.items.length, all:true }].concat(state.collections).filter(function (collection) {
       return !query || collection.name.toLowerCase().indexOf(query) !== -1;
     });
     var rows = collections.map(function (collection) {
@@ -867,11 +1044,11 @@
     if (!collection) return '<div class="empty">Cargando colección…</div>';
     if (!collection.items.length) {
       return '<section class="card collection-player"><button class="link" data-act="collection-back">← Volver a colecciones</button><h1 class="section-title" style="margin-top:14px">' + esc(collection.collection.name) + '</h1><div class="empty">Esta colección no tiene frases.</div>' +
-        (collection.collection.unassigned ? '' : '<div class="study-actions"><button class="primary" data-act="new-collection-phrase">Nueva frase</button><button class="ghost" data-act="edit-collection">Agregar existentes</button></div>') + '</section>';
+        (collection.collection.unassigned || collection.collection.all ? '' : '<div class="study-actions"><button class="primary" data-act="new-collection-phrase">Nueva frase</button><button class="ghost" data-act="edit-collection">Agregar existentes</button></div>') + '</section>';
     }
     playerVoiceReady_();
     return '<section class="collection-player"><div class="section-head"><button class="link" data-act="collection-back">← Colecciones</button>' +
-      (collection.collection.unassigned ? '' : '<span><button class="link" data-act="new-collection-phrase">Nueva frase</button><button class="link" data-act="edit-collection">Editar colección</button></span>') + '</div><h1 class="section-title">' + esc(collection.collection.name) + '</h1>' +
+      (collection.collection.unassigned || collection.collection.all ? '' : '<span><button class="link" data-act="new-collection-phrase">Nueva frase</button><button class="link" data-act="edit-collection">Editar colección</button></span>') + '</div><h1 class="section-title">' + esc(collection.collection.name) + '</h1>' +
       '<div class="session-layout">' + sessionControlsHtml_() + '<section class="card session-list"><div class="session-list-head"><div><h2 class="section-title">Frases</h2><span class="muted">' + sessionItems_().length + ' frases' + (recallPhase_() ? ' · Decí la respuesta antes de revelar.' : '') + '</span></div><div class="session-language-actions"><button class="ghost" id="support-german" data-act="toggle-support" data-support="german"></button><button class="ghost" id="support-spanish" data-act="toggle-support" data-support="spanish"></button></div></div><div id="session-list">' + sessionListHtml_() + '</div>' + paginationHtml('collection', sessionPage_()) + '</section></div></section>';
   }
 
@@ -928,7 +1105,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('.nav'), function (button) {
       button.className = 'nav' + (button.dataset.view === state.view ? ' on' : '');
     });
-    if (state.view === 'study') renderStudy(); else if (state.view === 'collections') renderCollections(); else if (state.view === 'manage') renderManage(); else renderEtymology();
+    if (state.view === 'study') renderStudy(); else if (state.view === 'collections') renderCollections(); else if (state.view === 'manage') renderManage(); else if (state.view === 'print') renderPrint(); else renderEtymology();
   }
 
   function openCollection(id) {
@@ -977,6 +1154,7 @@
     google.script.run.withSuccessHandler(function () {
       delete state.memberIdsByCollection[collectionKey_(collection.id)];
       state.collections = state.collections.filter(function (item) { return item.id !== collection.id; });
+      state.printCollectionIds = state.printCollectionIds.filter(function (id) { return collectionKey_(id) !== collectionKey_(collection.id); });
       state.collectionId = null;
       state.collection = null;
       state.collectionEditor = null;
@@ -1215,6 +1393,10 @@
         say('Datos actualizados.');
       });
     }
+    if (act === 'select-all-print-collections') return selectAllPrintCollections_();
+    if (act === 'clear-print-collections') return clearPrintCollections_();
+    if (act === 'move-print-collection') return movePrintCollection_(Number(button.dataset.index), Number(button.dataset.direction));
+    if (act === 'generate-pdf') return generatePrintPdf_();
     if (act === 'switch-view') {
       stopPlayer_();
       state.view = button.dataset.view;
@@ -1308,7 +1490,27 @@
     else if (event.target.id === 'collection-phrase-search') { state.collectionPhraseQuery = event.target.value; state.collectionCandidatePage = 1; renderCollections(); }
   });
   el.app.addEventListener('change', function (event) {
-    if (event.target.matches('[data-collection-candidate]')) {
+    if (event.target.matches('[data-print-status]')) {
+      return setPrintStatus_(event.target.dataset.id, event.target.checked);
+    } else if (event.target.matches('[data-print-collection]')) {
+      var collectionId = event.target.value;
+      if (event.target.checked && !printCollectionSelected_(collectionId)) state.printCollectionIds.push(collectionId);
+      if (!event.target.checked) state.printCollectionIds = state.printCollectionIds.filter(function (id) { return collectionKey_(id) !== collectionKey_(collectionId); });
+      state.printResult = null;
+      return renderPrint();
+    } else if (event.target.name === 'print-scope') {
+      state.printScope = event.target.value;
+      state.printResult = null;
+      return renderPrint();
+    } else if (event.target.id === 'print-order') {
+      state.printOrder = event.target.value;
+      state.printResult = null;
+      return renderPrint();
+    } else if (event.target.id === 'print-only-unprinted') {
+      state.printOnlyUnprinted = event.target.checked;
+      state.printResult = null;
+      return renderPrint();
+    } else if (event.target.matches('[data-collection-candidate]')) {
       state.collectionSelection[event.target.value] = event.target.checked;
       renderCollections();
     } else if (event.target.id === 'import-header') state.importHasHeader = event.target.checked;

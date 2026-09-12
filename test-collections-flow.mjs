@@ -16,6 +16,16 @@ const collectionNameKey = Function(
   '\nreturn collectionNameKey_;'
 )();
 assert.equal(collectionNameKey('  Mi   trabajo  '), 'mi trabajo');
+const isReservedCollectionName = Function(
+  "const ALL_COLLECTION_NAME = 'Todas';\n" +
+  "function normalize_(value) { return String(value == null ? '' : value).trim(); }\n" +
+  between(code, 'function collectionNameKey_(value) {', '\n\nfunction isReservedCollectionName_') +
+  between(code, 'function isReservedCollectionName_(value) {', '\n\nfunction isUnassignedCollection_') +
+  '\nreturn isReservedCollectionName_;'
+)();
+assert.equal(isReservedCollectionName(' TODAS '), true);
+assert.equal(isReservedCollectionName('Todas 2'), false);
+assert.match(code, /if \(isReservedCollectionName_\(name\)\) throw new Error\('El nombre "Todas" está reservado\.'\);/g);
 
 const collectionMemberEntries = Function(
   "const COLLECTION_MEMBER_COL = { COLLECTION_ID: 1, PHRASE_ID: 2, POSITION: 3 };\n" +
@@ -95,6 +105,23 @@ assert.deepEqual(memberships.rows.map(({collectionKey, phraseKey, position}) => 
 assert.deepEqual(memberships.byPhrase, {F1: ['C1']});
 
 const html = readFileSync('App.html', 'utf8');
+const localCollection = Function(
+  "const ALL_COLLECTION_ID = '__all__';\n" +
+  "var state = {items: [{id: 'F1'}, {id: 'F2'}, {id: 'F3'}], collections: [{id: 'C1', name: 'Trabajo'}], memberIdsByCollection: {C1: ['F1']}};\n" +
+  "function collectionKey_(id) { return String(id || '').toUpperCase(); }\n" +
+  "function collectionById_(id) { return state.collections.find(function (item) { return collectionKey_(item.id) === collectionKey_(id); }) || null; }\n" +
+  "function assignedPhraseIds_() { return {F1: true}; }\n" +
+  "function byId(id) { return state.items.find(function (item) { return item.id === id; }) || null; }\n" +
+  between(html, '  function localCollection_(id) {', '\n\n  function refreshOpenCollection_') +
+  '\nreturn {state, localCollection:localCollection_};'
+)();
+const allCollection = localCollection.localCollection('__all__');
+assert.equal(allCollection.collection.name, 'Todas');
+assert.equal(allCollection.collection.count, 3);
+assert.deepEqual(allCollection.items.map(({id}) => id), ['F1', 'F2', 'F3']);
+assert.notEqual(allCollection.items, localCollection.state.items);
+assert.match(html, /var collections = \[\{ id:ALL_COLLECTION_ID, name:'Todas', count:state\.items\.length, all:true \}\]\.concat\(state\.collections\)/);
+assert.match(html, /collection\.collection\.unassigned \|\| collection\.collection\.all/);
 assert.match(html, /if \(act === 'new-collection-phrase'\) \{ stopPlayer_\(\)/);
 assert.match(html, /expectedCollectionIds:id \? \(state\.editingCollectionIds \|\| \[\]\) : \[\]/);
 assert.doesNotMatch(code, /function (?:createPhrase|updatePhrase|addCollectionPhrase|writeCollectionMember_)\b/);
