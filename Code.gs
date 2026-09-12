@@ -5,7 +5,7 @@
  *
  * Hoja "Frases":
  * A: ID | B: Frase (DE) | C: Traducción | D: Notas | E: Estado | F: Etiquetas
- * G: Creado | H: Actualizado | I: Incluida en PDF
+ * G: Creado | H: Actualizado | I: Incluida en material
  *
  * Hoja "Historial": ID | Resultado | Estudiado
  *
@@ -29,15 +29,13 @@ const UNASSIGNED_COLLECTION_ID = '__unassigned__';
 const ALL_COLLECTION_NAME = 'Todas';
 const ALL_PRINT_SCOPE = 'all';
 const COLLECTION_PRINT_SCOPE = 'collections';
-const PRINT_FOLDER_NAME = 'Deutsch - Material';
-const PRINT_FOLDER_PROPERTY = 'PRINT_FOLDER_ID';
 const HISTORY_HEADERS = ['ID', 'Resultado', 'Estudiado'];
 const HISTORY_COL = { ID: 1, RESULT: 2, REVIEWED_AT: 3 };
 const HISTORY_WIDTH = HISTORY_HEADERS.length;
 const HISTORY_LIMIT = 20;
 
 const HEADERS = [
-  'ID', 'Frase (DE)', 'Traducción', 'Notas', 'Estado', 'Etiquetas', 'Creado', 'Actualizado', 'Incluida en PDF'
+  'ID', 'Frase (DE)', 'Traducción', 'Notas', 'Estado', 'Etiquetas', 'Creado', 'Actualizado', 'Incluida en material'
 ];
 
 const COL = { ID: 1, DE: 2, ES: 3, NOTES: 4, STATUS: 5, TAGS: 6, CREATED: 7, UPDATED: 8, PRINTED_AT: 9 };
@@ -944,70 +942,39 @@ function printPlan_(data, payload) {
     throw new Error(onlyUnprinted ? 'No hay frases no incluidas para generar.' : 'No hay frases para generar.');
   }
   const rowCount = groups.reduce(function (count, group) { return count + group.items.length; }, 0);
-  const plan = { scope: scope, order: order, groups: groups, phraseIds: phraseIds, count: phraseIds.length, rowCount: rowCount };
-  plan.signature = printPlanSignature_(plan);
-  return plan;
+  return { scope: scope, order: order, groups: groups, phraseIds: phraseIds, count: phraseIds.length, rowCount: rowCount };
 }
 
-function printPlanSignature_(plan) {
-  return JSON.stringify(plan.groups.map(function (group) {
-    const items = group.items.map(function (item) { return [item.id, item.de, item.es, item.printedAt]; });
-    if (plan.order === 'random') items.sort(function (a, b) { return a[0].localeCompare(b[0]); });
-    return [group.id, group.name, items];
-  }));
+function printMarkdownCell_(value) {
+  return normalize_(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|')
+    .replace(/\r?\n|\r/g, '<br>');
 }
 
-function printFolder_() {
-  const props = PropertiesService.getDocumentProperties();
-  const savedId = props.getProperty(PRINT_FOLDER_PROPERTY);
-  if (savedId) {
-    try {
-      return DriveApp.getFolderById(savedId);
-    } catch (error) {}
-  }
-
-  const folders = DriveApp.getFoldersByName(PRINT_FOLDER_NAME);
-  if (folders.hasNext()) {
-    const existing = folders.next();
-    props.setProperty(PRINT_FOLDER_PROPERTY, existing.getId());
-    return existing;
-  }
-
-  const folder = DriveApp.createFolder(PRINT_FOLDER_NAME);
-  props.setProperty(PRINT_FOLDER_PROPERTY, folder.getId());
-  return folder;
+function printMarkdown_(plan, now) {
+  const lines = [
+    '# Deutsch – Frases para estudiar',
+    '',
+    'Generado el ' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') + ' · ' + plan.count + ' frases distintas' +
+      (plan.rowCount !== plan.count ? ' · ' + plan.rowCount + ' filas' : ''),
+    ''
+  ];
+  plan.groups.forEach(function (group) {
+    lines.push('## ' + printMarkdownCell_(group.name), '', '| Deutsch | Español |', '| --- | --- |');
+    group.items.forEach(function (item) {
+      lines.push('| ' + printMarkdownCell_(item.de) + ' | ' + printMarkdownCell_(item.es) + ' |');
+    });
+    lines.push('');
+  });
+  return lines.join('\n');
 }
 
 function printFileName_(now) {
-  return 'Deutsch - Material - ' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd HH-mm') + '.pdf';
-}
-
-function appendPrintTable_(body, items) {
-  const rows = [['Deutsch', 'Español']].concat(items.map(function (item) {
-    return [item.de, item.es || ''];
-  }));
-  const table = body.appendTable(rows)
-    .setBorderColor('#dfe5ec')
-    .setBorderWidth(0.5)
-    .setColumnWidth(0, 260)
-    .setColumnWidth(1, 260);
-
-  for (let rowIndex = 0; rowIndex < table.getNumRows(); rowIndex++) {
-    const row = table.getRow(rowIndex);
-    for (let cellIndex = 0; cellIndex < 2; cellIndex++) {
-      const cell = row.getCell(cellIndex);
-      const text = cell.editAsText().setFontFamily('Arial').setFontSize(10);
-      cell.setVerticalAlignment(DocumentApp.VerticalAlignment.CENTER)
-        .setPaddingTop(5).setPaddingBottom(5).setPaddingLeft(6).setPaddingRight(6);
-      if (rowIndex === 0) {
-        cell.setBackgroundColor('#16202b');
-        text.setBold(true).setForegroundColor('#ffffff');
-      } else if (rowIndex % 2 === 0) {
-        cell.setBackgroundColor('#f6f8fa');
-      }
-    }
-  }
-  return table;
+  return 'Deutsch - Material - ' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd HH-mm') + '.md';
 }
 
 function markPhrasesPrinted_(table, phraseIds, now) {
@@ -1021,74 +988,22 @@ function markPhrasesPrinted_(table, phraseIds, now) {
   table.sheet.getRange(2, COL.UPDATED, columns.length, 2).setValues(columns);
 }
 
-function generatePhrasePdf(payload) {
-  const ss = getSpreadsheet_();
-  const plan = withLock_(function () {
-    return printPlan_(collectionData_(ss), payload);
+function generatePhraseMarkdown(payload) {
+  return withLock_(function () {
+    const ss = getSpreadsheet_();
+    const data = collectionData_(ss);
+    const plan = printPlan_(data, payload);
+    const now = new Date();
+    const content = printMarkdown_(plan, now);
+    markPhrasesPrinted_(data.phraseTable, plan.phraseIds, now);
+    return {
+      content: content,
+      name: printFileName_(now),
+      includedCount: plan.count,
+      rowCount: plan.rowCount,
+      markedAt: toIso_(now)
+    };
   });
-  const now = new Date();
-  const fileName = printFileName_(now);
-  let documentId = '';
-  let file = null;
-
-  try {
-      const doc = DocumentApp.create(fileName.replace(/\.pdf$/, ''));
-      documentId = doc.getId();
-      const body = doc.getBody();
-      body.setPageWidth(595.28).setPageHeight(841.89)
-        .setMarginTop(36).setMarginBottom(36).setMarginLeft(36).setMarginRight(36);
-
-      const title = body.appendParagraph('Deutsch – Frases para estudiar')
-        .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-      title.editAsText().setFontFamily('Arial').setFontSize(20).setBold(true).setForegroundColor('#16202b');
-      const subtitle = body.appendParagraph(
-        'Generado el ' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') + ' · ' + plan.count + ' frases distintas' +
-        (plan.rowCount !== plan.count ? ' · ' + plan.rowCount + ' filas' : '')
-      );
-      subtitle.editAsText().setFontFamily('Arial').setFontSize(10).setForegroundColor('#64748b');
-
-      plan.groups.forEach(function (group, index) {
-        const heading = body.appendParagraph(group.name).setHeading(DocumentApp.ParagraphHeading.HEADING2);
-        heading.editAsText().setFontFamily('Arial').setFontSize(14).setBold(true).setForegroundColor('#16202b');
-        if (index) heading.setSpacingBefore(14);
-        appendPrintTable_(body, group.items);
-      });
-      doc.saveAndClose();
-
-      const pdf = doc.getAs('application/pdf').setName(fileName);
-      file = withLock_(function () { return printFolder_().createFile(pdf); });
-      DriveApp.getFileById(documentId).setTrashed(true);
-      withLock_(function () {
-        const current = collectionData_(ss);
-        let currentPlan;
-        try {
-          currentPlan = printPlan_(current, payload);
-        } catch (error) {
-          throw new Error('Los datos cambiaron mientras se generaba el PDF. No se guardó ninguna marca; volvé a intentarlo.');
-        }
-        if (currentPlan.signature !== plan.signature) {
-          throw new Error('Los datos cambiaron mientras se generaba el PDF. No se guardó ninguna marca; volvé a intentarlo.');
-        }
-        markPhrasesPrinted_(current.phraseTable, currentPlan.phraseIds, now);
-      });
-
-      return {
-        fileId: file.getId(),
-        url: file.getUrl(),
-        name: file.getName(),
-        includedCount: plan.count,
-        rowCount: plan.rowCount,
-        markedAt: toIso_(now)
-      };
-  } catch (error) {
-      if (file) {
-        try { file.setTrashed(true); } catch (cleanupError) {}
-      }
-      if (documentId) {
-        try { DriveApp.getFileById(documentId).setTrashed(true); } catch (cleanupError) {}
-      }
-      throw error;
-  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1403,7 +1318,7 @@ function setStatus(id, status, expectedUpdated) {
 function setPhrasePrinted(payload) {
   const id = normalize_(payload && payload.id);
   const printed = payload && payload.printed;
-  if (!id || typeof printed !== 'boolean') throw new Error('La marca de PDF es inválida.');
+  if (!id || typeof printed !== 'boolean') throw new Error('La marca de material es inválida.');
 
   return withLock_(function () {
     const sheet = getSheet_();

@@ -20,9 +20,10 @@ mutaciones hacen una sola llamada y actualizan el estado recibido. Si editás
 la planilla directamente mientras la app está abierta, usá **Actualizar datos**
 antes de seguir trabajando para traer esos cambios sin pisarlos.
 
-La pantalla **Material** genera PDFs A4 en la carpeta de Drive `Deutsch - Material`.
-La primera generación solicita permisos para Documentos y Drive; ejecutá
-**Deutsch → Preparar hoja** una vez para aplicar la columna `Incluida en PDF`.
+La pantalla **Material** descarga un archivo Markdown con las frases en tablas
+de dos columnas. Podés convertirlo luego a PDF o DOCX desde tu editor preferido.
+Ejecutá **Deutsch → Preparar hoja** una vez para aplicar la columna
+`Incluida en material`.
 
 ## IA con Gemini
 

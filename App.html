@@ -804,7 +804,7 @@
       return '<article class="manage-item"><h3>' + esc(item.de) + '</h3><p>' + esc(item.es || 'Sin traducción') + '</p>' +
         (item.notes ? '<p class="hint">' + esc(item.notes) + '</p>' : '') + '<div class="manage-meta">' +
         item.tags.map(function (tag) { return '<span class="tag">#' + esc(tag) + '</span>'; }).join('') +
-        '<label class="print-status"><input type="checkbox" data-print-status data-id="' + esc(item.id) + '"' + (item.printedAt ? ' checked' : '') + '> Incluida en PDF</label>' +
+        '<label class="print-status"><input type="checkbox" data-print-status data-id="' + esc(item.id) + '"' + (item.printedAt ? ' checked' : '') + '> Incluida en material</label>' +
         '<span class="muted">' + esc(item.id) + '</span><span style="flex:1"></span><button class="link" data-act="edit" data-id="' + esc(item.id) + '">Editar</button>' +
         '<button class="link danger" data-act="delete" data-id="' + esc(item.id) + '">Borrar</button></div></article>';
     }).join('') + paginationHtml('manage', page);
@@ -879,36 +879,43 @@
       (estimate.rows !== estimate.unique ? ' · ' + estimate.rows + ' filas por repeticiones entre colecciones' : '') + '</div>';
   }
 
+  function clearPrintResult_() {
+    if (state.printResult && state.printResult.url && window.URL && window.URL.revokeObjectURL) {
+      window.URL.revokeObjectURL(state.printResult.url);
+    }
+    state.printResult = null;
+  }
+
   function renderPrint() {
     var collections = state.printScope === 'collections';
     var result = state.printResult;
     var estimate = printEstimate_();
-    var buttonLabel = state.printGenerating ? 'Generando PDF…' : 'Generar PDF';
+    var buttonLabel = state.printGenerating ? 'Generando material…' : 'Descargar Markdown';
     var disabled = state.printGenerating ? ' disabled' : '';
     el.screen.innerHTML = '<div class="print-grid"><section class="panel print-panel"><div class="section-head"><h1 class="section-title">Material de estudio</h1></div>' +
-      '<p class="hint">Generá un PDF con frases en alemán y español para estudiar fuera de la app.</p>' +
+      '<p class="hint">Descargá un archivo Markdown con frases en alemán y español para convertirlo luego a PDF o DOCX.</p>' +
       '<div class="field"><label>Qué incluir</label><div class="print-options">' +
       '<label class="print-option"><input type="radio" name="print-scope" value="all"' + disabled + (state.printScope === 'all' ? ' checked' : '') + '> Todas las frases</label>' +
       '<label class="print-option"><input type="radio" name="print-scope" value="collections"' + disabled + (collections ? ' checked' : '') + '> Colecciones seleccionadas</label></div></div>' +
-      (collections ? '<div class="section-head"><h2 class="section-title">Colecciones</h2><span><button class="link" data-act="select-all-print-collections"' + disabled + '>Todas</button><button class="link" data-act="clear-print-collections"' + disabled + '>Limpiar</button></span></div><div class="card print-collection-list">' + printCollectionOptionsHtml_() + '</div><h2 class="section-title" style="margin-top:18px">Orden de colecciones</h2><p class="hint">Este orden sólo se aplica a este PDF.</p><div class="print-order-list">' + printOrderHtml_() + '</div>' : '') +
+      (collections ? '<div class="section-head"><h2 class="section-title">Colecciones</h2><span><button class="link" data-act="select-all-print-collections"' + disabled + '>Todas</button><button class="link" data-act="clear-print-collections"' + disabled + '>Limpiar</button></span></div><div class="card print-collection-list">' + printCollectionOptionsHtml_() + '</div><h2 class="section-title" style="margin-top:18px">Orden de colecciones</h2><p class="hint">Este orden sólo se aplica a este archivo.</p><div class="print-order-list">' + printOrderHtml_() + '</div>' : '') +
       '<div class="field" style="margin-top:18px"><label for="print-order">Orden de frases</label><select id="print-order"' + disabled + '><option value="manual"' + (state.printOrder === 'manual' ? ' selected' : '') + '>Orden actual</option><option value="random"' + (state.printOrder === 'random' ? ' selected' : '') + '>Aleatorio</option></select></div>' +
-      '<label class="print-option"><input id="print-only-unprinted" type="checkbox"' + disabled + (state.printOnlyUnprinted ? ' checked' : '') + '> Sólo frases no incluidas en PDF</label>' +
-      printSummaryHtml_() + '<button class="primary" data-act="generate-pdf"' + (state.printGenerating || !estimate.unique ? ' disabled' : '') + '>' + buttonLabel + '</button>' +
-      (result ? '<div class="print-result">PDF listo: ' + result.includedCount + ' frases distintas' + (result.rowCount !== result.includedCount ? ' · ' + result.rowCount + ' filas' : '') + '.<br><a href="' + esc(result.url) + '" target="_blank" rel="noopener">Abrir ' + esc(result.name) + '</a></div>' : '') +
+      '<label class="print-option"><input id="print-only-unprinted" type="checkbox"' + disabled + (state.printOnlyUnprinted ? ' checked' : '') + '> Sólo frases no incluidas en material</label>' +
+      printSummaryHtml_() + '<button class="primary" data-act="generate-markdown"' + (state.printGenerating || !estimate.unique ? ' disabled' : '') + '>' + buttonLabel + '</button>' +
+      (result ? '<div class="print-result">Material descargado: ' + result.includedCount + ' frases distintas' + (result.rowCount !== result.includedCount ? ' · ' + result.rowCount + ' filas' : '') + '.<br><a href="' + esc(result.url) + '" download="' + esc(result.name) + '">Volver a descargar ' + esc(result.name) + '</a></div>' : '') +
       '</section><aside class="panel print-panel"><h2 class="section-title">Cómo funciona</h2><p class="hint">Cada colección aparece en su propio bloque con una tabla de dos columnas. Las frases sin traducción quedan con la celda española vacía.</p><p class="hint">Al generarlo, las frases incluidas quedan marcadas con la fecha de generación. Podés corregir esa marca desde Gestionar.</p></aside></div>';
   }
 
   function selectAllPrintCollections_() {
     if (state.printGenerating) return;
     state.printCollectionIds = printableCollections_().map(function (collection) { return collection.id; });
-    state.printResult = null;
+    clearPrintResult_();
     renderPrint();
   }
 
   function clearPrintCollections_() {
     if (state.printGenerating) return;
     state.printCollectionIds = [];
-    state.printResult = null;
+    clearPrintResult_();
     renderPrint();
   }
 
@@ -919,7 +926,7 @@
     var moved = state.printCollectionIds[index];
     state.printCollectionIds[index] = state.printCollectionIds[next];
     state.printCollectionIds[next] = moved;
-    state.printResult = null;
+    clearPrintResult_();
     renderPrint();
   }
 
@@ -933,14 +940,14 @@
         current.updated = updated.updated;
       }
       renderManageList();
-      say(printed ? 'Frase marcada como incluida.' : 'Marca de PDF quitada.');
+      say(printed ? 'Frase marcada como incluida.' : 'Marca de material quitada.');
     }).withFailureHandler(function (err) {
       renderManageList();
       say(err.message, 'err');
     }).setPhrasePrinted({ id:id, printed:printed, expectedUpdated:item.updated });
   }
 
-  function generatePrintPdf_() {
+  function generatePrintMarkdown_() {
     var estimate = printEstimate_();
     if (!estimate.unique || state.printGenerating) return;
     var payload = {
@@ -949,26 +956,31 @@
       onlyUnprinted:state.printOnlyUnprinted,
       order:state.printOrder
     };
-    var popup = null;
-    try { popup = window.open('', '_blank'); } catch (err) {}
     state.printGenerating = true;
-    state.printResult = null;
+    clearPrintResult_();
     renderPrint();
     google.script.run.withSuccessHandler(function (result) {
+      var blob = new Blob([result.content], {type:'text/markdown;charset=utf-8'});
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = result.name;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
       state.printGenerating = false;
-      state.printResult = result;
+      state.printResult = {url:url, name:result.name, includedCount:result.includedCount, rowCount:result.rowCount, markedAt:result.markedAt};
       render();
-      if (popup) popup.location.href = result.url;
       reload(function () {
         render();
-        say('PDF generado y frases marcadas.');
+        say('Material descargado y frases marcadas.');
       });
     }).withFailureHandler(function (err) {
       state.printGenerating = false;
       render();
-      if (popup) popup.close();
       say(err.message, 'err');
-    }).generatePhrasePdf(payload);
+    }).generatePhraseMarkdown(payload);
   }
 
   function collectionCatalogHtml() {
@@ -1396,7 +1408,7 @@
     if (act === 'select-all-print-collections') return selectAllPrintCollections_();
     if (act === 'clear-print-collections') return clearPrintCollections_();
     if (act === 'move-print-collection') return movePrintCollection_(Number(button.dataset.index), Number(button.dataset.direction));
-    if (act === 'generate-pdf') return generatePrintPdf_();
+    if (act === 'generate-markdown') return generatePrintMarkdown_();
     if (act === 'switch-view') {
       stopPlayer_();
       state.view = button.dataset.view;
@@ -1496,19 +1508,19 @@
       var collectionId = event.target.value;
       if (event.target.checked && !printCollectionSelected_(collectionId)) state.printCollectionIds.push(collectionId);
       if (!event.target.checked) state.printCollectionIds = state.printCollectionIds.filter(function (id) { return collectionKey_(id) !== collectionKey_(collectionId); });
-      state.printResult = null;
+      clearPrintResult_();
       return renderPrint();
     } else if (event.target.name === 'print-scope') {
       state.printScope = event.target.value;
-      state.printResult = null;
+      clearPrintResult_();
       return renderPrint();
     } else if (event.target.id === 'print-order') {
       state.printOrder = event.target.value;
-      state.printResult = null;
+      clearPrintResult_();
       return renderPrint();
     } else if (event.target.id === 'print-only-unprinted') {
       state.printOnlyUnprinted = event.target.checked;
-      state.printResult = null;
+      clearPrintResult_();
       return renderPrint();
     } else if (event.target.matches('[data-collection-candidate]')) {
       state.collectionSelection[event.target.value] = event.target.checked;
