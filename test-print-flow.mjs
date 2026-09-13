@@ -117,8 +117,30 @@ assert.equal(printMarkdown({count: 1, rowCount: 2, groups: [
   {name: 'Sin colección', items: [{de: 'Guten Morgen', es: ''}]}
 ]}, new Date()), '# Deutsch – Frases para estudiar\n\nGenerado el FECHA · 1 frases distintas · 2 filas\n\n## Viaje\n\n| Deutsch | Español |\n| --- | --- |\n| Ich \\| bin | Estoy |\n\n## Sin colección\n\n| Deutsch | Español |\n| --- | --- |\n| Guten Morgen |  |\n');
 
+const printHtml = Function(
+  "const Session = {getScriptTimeZone: () => 'TZ'};\n" +
+  "const Utilities = {formatDate: () => 'FECHA'};\n" +
+  'function normalize_(value) { return String(value == null ? \'\' : value).trim(); }\n' +
+  between(code, 'function printHtmlCell_(value) {', '\n\nfunction printHtmlBody_') +
+  between(code, 'function printHtmlBody_(plan, now) {', '\n\nfunction printHtmlDocument_') +
+  '\nreturn printHtmlBody_;'
+)();
+const htmlMaterial = printHtml({count: 1, rowCount: 1, groups: [
+  {name: 'Viaje', items: [{de: '<Ich>', es: 'Estoy & bien'}]}
+]}, new Date());
+assert.match(htmlMaterial, /&lt;Ich&gt;/);
+assert.match(htmlMaterial, /Estoy &amp; bien/);
+assert.match(htmlMaterial, /<table>[\s\S]*<th>Deutsch<\/th>/);
+
+const replaceMaterialBody = Function(
+  between(html, '  function replaceMaterialBody_(document, body) {', '\n\n  function generatePrintMaterial_') +
+  '\nreturn replaceMaterialBody_;'
+)();
+assert.equal(replaceMaterialBody('<html><body><p>Original</p></body></html>', ''), '<html><body></body></html>');
+
 assert.doesNotMatch(code, /DriveApp|DocumentApp|generatePhrasePdf/);
 assert.match(html, /generatePhraseMarkdown/);
+assert.match(html, /generatePhraseHtml/);
 assert.doesNotMatch(html, /generatePhrasePdf|generate-pdf/);
 
 console.log('Print selection, ordering, and unprinted filtering: OK');

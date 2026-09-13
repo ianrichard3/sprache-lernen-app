@@ -25,6 +25,8 @@ jobs:
         run: node test-study-flow.mjs
       - name: Check collections flow
         run: node test-collections-flow.mjs
+      - name: Check print flow
+        run: node test-print-flow.mjs
       - name: Check Gemini response parsing
         run: node test-ai-flow.mjs
       - name: Check client syntax

@@ -20,10 +20,10 @@ mutaciones hacen una sola llamada y actualizan el estado recibido. Si editás
 la planilla directamente mientras la app está abierta, usá **Actualizar datos**
 antes de seguir trabajando para traer esos cambios sin pisarlos.
 
-La pantalla **Material** descarga un archivo Markdown con las frases en tablas
-de dos columnas. Podés convertirlo luego a PDF o DOCX desde tu editor preferido.
-Ejecutá **Deutsch → Preparar hoja** una vez para aplicar la columna
-`Incluida en material`.
+La pantalla **Material** permite previsualizar y editar las frases, y descargar
+HTML con tabla, tipografía grande y espaciado ajustable. También conserva la
+descarga Markdown para usarla con otro editor. Ejecutá **Deutsch → Preparar
+hoja** una vez para aplicar la columna `Incluida en material`.
 
 ## IA con Gemini
 

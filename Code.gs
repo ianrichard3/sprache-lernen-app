@@ -942,7 +942,17 @@ function printPlan_(data, payload) {
     throw new Error(onlyUnprinted ? 'No hay frases no incluidas para generar.' : 'No hay frases para generar.');
   }
   const rowCount = groups.reduce(function (count, group) { return count + group.items.length; }, 0);
-  return { scope: scope, order: order, groups: groups, phraseIds: phraseIds, count: phraseIds.length, rowCount: rowCount };
+  const plan = { scope: scope, order: order, groups: groups, phraseIds: phraseIds, count: phraseIds.length, rowCount: rowCount };
+  plan.signature = printPlanSignature_(plan);
+  return plan;
+}
+
+function printPlanSignature_(plan) {
+  return JSON.stringify(plan.groups.map(function (group) {
+    const items = group.items.map(function (item) { return [item.id, item.de, item.es, item.printedAt]; });
+    if (plan.order === 'random') items.sort(function (a, b) { return a[0].localeCompare(b[0]); });
+    return [group.id, group.name, items];
+  }));
 }
 
 function printMarkdownCell_(value) {
@@ -973,8 +983,45 @@ function printMarkdown_(plan, now) {
   return lines.join('\n');
 }
 
+function printHtmlCell_(value) {
+  return normalize_(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/\r?\n|\r/g, '<br>');
+}
+
+function printHtmlBody_(plan, now) {
+  const lines = [
+    '<h1>Deutsch – Frases para estudiar</h1>',
+    '<p class="material-meta">Generado el ' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') + ' · ' + plan.count + ' frases distintas' +
+      (plan.rowCount !== plan.count ? ' · ' + plan.rowCount + ' filas' : '') + '</p>'
+  ];
+  plan.groups.forEach(function (group) {
+    lines.push('<section><h2>' + printHtmlCell_(group.name) + '</h2><table><thead><tr><th>Deutsch</th><th>Español</th></tr></thead><tbody>');
+    group.items.forEach(function (item) {
+      lines.push('<tr><td>' + printHtmlCell_(item.de) + '</td><td>' + printHtmlCell_(item.es) + '</td></tr>');
+    });
+    lines.push('</tbody></table></section>');
+  });
+  return lines.join('');
+}
+
+function printHtmlDocument_(body, fontSize, lineHeight) {
+  const size = [18, 20, 22, 24].indexOf(Number(fontSize)) !== -1 ? Number(fontSize) : 20;
+  const leading = [1.4, 1.6, 1.8, 2].indexOf(Number(lineHeight)) !== -1 ? Number(lineHeight) : 1.6;
+  return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Deutsch – Material</title><style>' +
+    '*,*::before,*::after{box-sizing:border-box}body{max-width:900px;margin:0 auto;padding:28px 24px;color:#111;font-family:Georgia,"Times New Roman",serif;font-size:' + size + 'px;line-height:' + leading + '}h1{margin:0 0 .25em;font-size:1.45em;line-height:1.15}h2{margin:1.5em 0 .45em;font-size:1.1em;line-height:1.2;break-after:avoid;page-break-after:avoid}.material-meta{margin:0 0 1.5em;color:#555;font: .65em/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}table{width:100%;border-collapse:collapse;table-layout:fixed;margin:0 0 1.4em}th,td{border:1px solid #777;padding:.65em .6em;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#eee;font:.72em/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-transform:uppercase;letter-spacing:.04em}tr{break-inside:avoid;page-break-inside:avoid}section{break-inside:auto;page-break-inside:auto}@media print{body{max-width:none;padding:12mm 10mm}h2{break-before:page;page-break-before:always}section:first-of-type h2{break-before:auto;page-break-before:auto}}' +
+    '</style></head><body>' + body + '</body></html>';
+}
+
 function printFileName_(now) {
   return 'Deutsch - Material - ' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd HH-mm') + '.md';
+}
+
+function printHtmlFileName_(now) {
+  return 'Deutsch - Material - ' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd HH-mm') + '.html';
 }
 
 function markPhrasesPrinted_(table, phraseIds, now) {
@@ -1002,6 +1049,43 @@ function generatePhraseMarkdown(payload) {
       includedCount: plan.count,
       rowCount: plan.rowCount,
       markedAt: toIso_(now)
+    };
+  });
+}
+
+function previewPhraseMaterial(payload) {
+  const data = collectionData_(getSpreadsheet_());
+  const plan = printPlan_(data, payload);
+  const now = new Date();
+  return {
+    body: printHtmlBody_(plan, now),
+    includedCount: plan.count,
+    rowCount: plan.rowCount,
+    name: printHtmlFileName_(now),
+    signature: plan.signature
+  };
+}
+
+function generatePhraseHtml(payload) {
+  return withLock_(function () {
+    const ss = getSpreadsheet_();
+    const data = collectionData_(ss);
+    const plan = printPlan_(data, payload);
+    if (normalize_(payload && payload.previewSignature) && payload.previewSignature !== plan.signature) {
+      throw new Error('Los datos cambiaron mientras se preparaba el material. Volvé a previsualizarlo.');
+    }
+    const now = new Date();
+    const body = printHtmlBody_(plan, now);
+    const content = printHtmlDocument_(body, payload && payload.fontSize, payload && payload.lineHeight);
+    markPhrasesPrinted_(data.phraseTable, plan.phraseIds, now);
+    return {
+      content: content,
+      body: body,
+      name: printHtmlFileName_(now),
+      includedCount: plan.count,
+      rowCount: plan.rowCount,
+      markedAt: toIso_(now),
+      signature: plan.signature
     };
   });
 }
