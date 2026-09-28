@@ -18,7 +18,7 @@
   #app { min-height:100vh; }
   .topbar { display:flex; align-items:center; gap:16px; padding:12px 20px; background:var(--paper); border-bottom:1px solid var(--rule); }
   .brand { font-weight:750; letter-spacing:-.01em; white-space:nowrap; }
-  nav { display:flex; gap:4px; }
+  nav { display:flex; gap:4px; flex-wrap:wrap; }
   .nav { background:transparent; color:var(--muted); font-weight:650; }
   .nav.on,.primary { background:var(--ink); color:#fff; font-weight:650; }
   .nav.on:hover,.primary:hover { background:#0d1620; }
@@ -164,6 +164,7 @@
       <button class="nav" data-act="switch-view" data-view="collections">Colecciones</button>
       <button class="nav" data-act="switch-view" data-view="manage">Gestionar</button>
       <button class="nav" data-act="switch-view" data-view="print">Material</button>
+      <button class="nav" data-act="switch-view" data-view="generate">Generar</button>
       <button class="nav" data-act="switch-view" data-view="etymology">Etimología</button>
     </nav>
     <button class="link" data-act="refresh-data">Actualizar datos</button>
@@ -177,9 +178,11 @@
   'use strict';
 
   var state = {
+    loadingData: false,
     items: [], history: [], view: 'study', detailId: null, revealed: false,
     saving: false, editing: null, editingCollectionIds: null, studyTab: 'phrases', studyPage: 1, studyQuery: '', managePage: 1, manageQuery: '', importText: '',
     importPreview: null, importHasHeader: true, importDelimiter: ',',
+    generator: { context:'', items:[], collectionIds:[], busy:false, saving:false },
     etymologyText: '', etymologyResult: '',
     collections: [], memberIdsByCollection: {}, collectionsLoaded: false, collectionQuery: '', collectionId: null, collection: null, collectionEditor: null, collectionPhraseQuery: '', collectionPage: 1, collectionEditorPage: 1, collectionCandidatePage: 1, collectionSelection: {}, collectionPhraseDraft: false,
     printScope: 'all', printCollectionIds: [], printOnlyUnprinted: false, printOrder: 'manual', printFormat: 'html', printFontSize: 20, printLineHeight: 1.6, printRevision: 0, printGenerating: false, printPreviewLoading: false, printPreview: null, printResult: null,
@@ -1182,6 +1185,93 @@
     if (state.collectionId && !state.collectionEditor) updatePlayerUi_();
   }
 
+  function renderGenerator() {
+    var focusedId = document.activeElement && document.activeElement.id;
+    var draft = state.generator;
+    var disabled = draft.busy ? ' disabled' : '';
+    var selected = draft.items.filter(function (item) { return item.selected && !item.saved; }).length;
+    var collections = state.collections.filter(function (collection) { return !collection.unassigned; });
+    draft.collectionIds = draft.collectionIds.filter(function (id) { return !!collectionById_(id); });
+    var destinations = collections.map(function (collection) {
+      return '<label><input type="checkbox" id="generator-collection-' + esc(collection.id) + '" data-generator-collection value="' + esc(collection.id) + '"' +
+        (draft.collectionIds.indexOf(collection.id) !== -1 ? ' checked' : '') + disabled + '> ' + esc(collection.name) + '</label>';
+    }).join('');
+    var rows = draft.items.map(function (item, index) {
+      var locked = draft.busy || item.saved ? ' disabled' : '';
+      return '<article class="panel" style="margin-top:12px"><label><input type="checkbox" id="generator-select-' + index + '" data-generator-select="' + index + '"' +
+        (item.selected ? ' checked' : '') + locked + '> Frase ' + (index + 1) + '</label>' +
+        (item.saved ? '<p role="status">' + (item.reused ? 'Agregada usando la frase existente; se conservó su traducción y progreso.' : 'Agregada.') + '</p>' : '') +
+        '<div class="field"><label for="generated-de-' + index + '">Alemán</label><textarea id="generated-de-' + index + '" data-generator-field="de" data-index="' + index + '"' + locked + '>' + esc(item.de) + '</textarea></div>' +
+        '<div class="field"><label for="generated-es-' + index + '">Español</label><textarea id="generated-es-' + index + '" data-generator-field="es" data-index="' + index + '"' + locked + '>' + esc(item.es) + '</textarea></div></article>';
+    }).join('');
+    el.screen.innerHTML = '<section style="max-width:800px;margin:auto"><h1 class="section-title">Generar frases</h1>' +
+      '<p class="hint">10 frases en alemán B1–B2 con traducción natural al español. Revisalas antes de agregarlas.</p>' +
+      '<div class="field"><label for="generator-context">Situación o temática</label><textarea id="generator-context" placeholder="Por ejemplo: pedir ayuda con un bug"' + disabled + '>' + esc(draft.context) + '</textarea></div>' +
+      '<button class="primary" data-act="generate-phrases"' + disabled + '>' + (draft.items.length ? 'Generar otra tanda' : 'Generar frases') + '</button>' +
+      '<p role="status" aria-live="polite">' + (draft.busy ? 'Procesando…' : '') + '</p>' +
+      (draft.items.length ? '<div class="panel"><h2 class="section-title">Colecciones de destino</h2><p class="hint">Las frases seleccionadas se agregan a todas las colecciones que marques.</p>' +
+        (destinations ? '<div class="collection-picker">' + destinations + '</div>' : '<p>Creá una colección en Colecciones y volvé. Tu borrador se conserva mientras no recargues la app.</p>') +
+        '<div class="form-actions"><button class="ghost" data-act="generator-select-all"' + disabled + '>Seleccionar todas</button><button class="ghost" data-act="generator-select-none"' + disabled + '>Deseleccionar todas</button>' +
+        '<button class="primary" data-act="save-generated"' + (draft.busy || !selected || !draft.collectionIds.length ? ' disabled' : '') + '>Agregar seleccionadas (' + selected + ')</button></div></div>' + rows : '') + '</section>';
+    var focused = focusedId && document.getElementById(focusedId);
+    if (focused && !focused.disabled) focused.focus();
+  }
+
+  function generatePhrases_() {
+    var draft = state.generator;
+    if (draft.busy) return;
+    if (!draft.context.trim()) return say('Escribí una situación o temática.', 'err');
+    if (draft.items.some(function (item) { return !item.saved; }) && !confirm('¿Descartar los borradores sin guardar cuando esté lista la nueva tanda?')) return;
+    draft.busy = true;
+    renderGenerator();
+    google.script.run.withSuccessHandler(function (items) {
+      draft.items = items.map(function (item) { return { de:item.de, es:item.es, selected:false, saved:false }; });
+      draft.busy = false;
+      if (state.view === 'generate') renderGenerator();
+      say('10 frases listas para revisar.');
+    }).withFailureHandler(function (err) {
+      draft.busy = false;
+      if (state.view === 'generate') renderGenerator();
+      say(err.message, 'err');
+    }).generatePhrases(draft.context);
+  }
+
+  function saveGeneratedPhrases_() {
+    var draft = state.generator;
+    if (draft.busy) return;
+    if (state.loadingData) return say('Esperá a que termine la actualización antes de guardar.', 'err');
+    var selected = draft.items.filter(function (item) { return item.selected && !item.saved; });
+    if (!selected.length || !draft.collectionIds.length) return say('Elegí frases y al menos una colección.', 'err');
+    if (selected.some(function (item) { return !item.de.trim() || !item.es.trim(); })) return say('Completá el alemán y español de las frases seleccionadas.', 'err');
+    draft.busy = true;
+    draft.saving = true;
+    renderGenerator();
+    google.script.run.withSuccessHandler(function (data) {
+      data.results.forEach(function (result, index) {
+        var existing = byId(result.item.id);
+        if (existing) state.items[state.items.indexOf(existing)] = result.item;
+        else state.items.unshift(result.item);
+        setPhraseCollectionIds_(result.item.id, result.collectionIds);
+        selected[index].saved = true;
+        selected[index].reused = result.reused;
+        selected[index].de = result.item.de;
+        selected[index].es = result.item.es;
+      });
+      draft.busy = false;
+      draft.saving = false;
+      decorateCollections_();
+      if (state.collectionId) state.collection = localCollection_(state.collectionId);
+      // Conservá formularios y material editado; el backend valida la firma del material al descargar.
+      if (state.view === 'generate') renderGenerator();
+      say('Frases agregadas a las colecciones elegidas.');
+    }).withFailureHandler(function (err) {
+      draft.busy = false;
+      draft.saving = false;
+      if (state.view === 'generate') renderGenerator();
+      say(err.message, 'err');
+    }).saveGeneratedPhrases({ items:selected.map(function (item) { return { de:item.de, es:item.es }; }), collectionIds:draft.collectionIds.slice() });
+  }
+
   function renderEtymology() {
     var result = state.etymologyResult;
     el.screen.innerHTML = '<section class="panel form-panel" style="max-width:720px"><div class="section-head"><h1 class="section-title">Etimología</h1></div>' +
@@ -1195,7 +1285,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('.nav'), function (button) {
       button.className = 'nav' + (button.dataset.view === state.view ? ' on' : '');
     });
-    if (state.view === 'study') renderStudy(); else if (state.view === 'collections') renderCollections(); else if (state.view === 'manage') renderManage(); else if (state.view === 'print') renderPrint(); else renderEtymology();
+    if (state.view === 'study') renderStudy(); else if (state.view === 'collections') renderCollections(); else if (state.view === 'manage') renderManage(); else if (state.view === 'print') renderPrint(); else if (state.view === 'generate') renderGenerator(); else renderEtymology();
   }
 
   function openCollection(id) {
@@ -1474,17 +1564,31 @@
   }
 
   function reload(done, preservePrint) {
+    if (state.generator.saving) return say('Esperá a que termine el guardado antes de actualizar.', 'err');
+    if (state.loadingData) return;
+    state.loadingData = true;
     google.script.run.withSuccessHandler(function (data) {
+      state.loadingData = false;
       applyAppData_(data);
       if (!preservePrint) clearPrintResult_();
       if (done) done(); else render();
-    }).withFailureHandler(function (err) { say(err.message, 'err'); }).loadAppData();
+    }).withFailureHandler(function (err) {
+      state.loadingData = false;
+      say(err.message, 'err');
+    }).loadAppData();
   }
 
   el.app.addEventListener('click', function (event) {
     var button = event.target.closest('[data-act]');
     if (!button) return;
     var act = button.dataset.act;
+    if (act === 'generate-phrases') return generatePhrases_();
+    if (act === 'save-generated') return saveGeneratedPhrases_();
+    if (act === 'generator-select-all' || act === 'generator-select-none') {
+      if (state.generator.busy) return;
+      state.generator.items.forEach(function (item) { if (!item.saved) item.selected = act === 'generator-select-all'; });
+      return renderGenerator();
+    }
     if (act === 'refresh-data') {
       if (state.view === 'print') capturePrintPreview_();
       stopPlayer_();
@@ -1586,7 +1690,9 @@
   });
 
   el.app.addEventListener('input', function (event) {
-    if (event.target.id === 'manage-search') { state.manageQuery = event.target.value; state.managePage = 1; renderManageList(); }
+    if (event.target.id === 'generator-context') state.generator.context = event.target.value;
+    else if (event.target.matches('[data-generator-field]')) state.generator.items[Number(event.target.dataset.index)][event.target.dataset.generatorField] = event.target.value;
+    else if (event.target.id === 'manage-search') { state.manageQuery = event.target.value; state.managePage = 1; renderManageList(); }
     else if (event.target.id === 'study-search') { state.studyQuery = event.target.value; state.studyPage = 1; renderStudyList(); }
     else if (event.target.id === 'import-text') state.importText = event.target.value;
     else if (event.target.id === 'etymology-source') state.etymologyText = event.target.value;
@@ -1606,7 +1712,14 @@
     }
   });
   el.app.addEventListener('change', function (event) {
-    if (event.target.matches('[data-print-status]')) {
+    if (event.target.matches('[data-generator-select]')) {
+      state.generator.items[Number(event.target.dataset.generatorSelect)].selected = event.target.checked;
+      return renderGenerator();
+    } else if (event.target.matches('[data-generator-collection]')) {
+      if (event.target.checked) state.generator.collectionIds.push(event.target.value);
+      else state.generator.collectionIds = state.generator.collectionIds.filter(function (id) { return id !== event.target.value; });
+      return renderGenerator();
+    } else if (event.target.matches('[data-print-status]')) {
       return setPrintStatus_(event.target.dataset.id, event.target.checked);
     } else if (event.target.matches('[data-print-collection]')) {
       var collectionId = event.target.value;

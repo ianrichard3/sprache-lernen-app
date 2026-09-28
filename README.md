@@ -39,3 +39,16 @@ Apps Script cuando Google lo pida.
 El reproductor usa la voz alemana instalada en el navegador mediante Web Speech
 API. No requiere API key, facturación ni guarda archivos MP3. Si el dispositivo
 no tiene una voz alemana, la app lo indica y deja el resto de funciones usable.
+
+## Generador de frases
+
+En **Generar**, escribí una situación o temática para obtener 10 frases de nivel
+B1–B2 en alemán con traducción natural al español, usando la misma clave Gemini.
+Revisá y editá los resultados, marcá las frases y elegí una o varias colecciones
+existentes. **Agregar seleccionadas** guarda sólo las marcadas en todos los
+destinos elegidos. Si una frase ya existe, conserva su traducción y progreso y
+se agrega a las colecciones que falten.
+
+Los borradores se conservan al navegar entre secciones, pero se pierden al
+recargar o cerrar la app. Generar otra tanda pide confirmar el descarte de los
+borradores pendientes y los reemplaza sólo si la generación termina bien.

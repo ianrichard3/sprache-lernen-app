@@ -364,7 +364,8 @@ function timeOf_(value) {
 }
 
 function withLock_(callback) {
-  const lock = LockService.getDocumentLock();
+  // La web app no tiene contexto de documento; todas las escrituras comparten este lock.
+  const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
     return callback();
@@ -1260,6 +1261,83 @@ function savePhrase(payload) {
       }
       throw error;
     }
+  });
+}
+
+/** Agrega una tanda y sus asociaciones sin modificar frases existentes. */
+function saveGeneratedPhrases(payload) {
+  const items = payload && payload.items;
+  if (!Array.isArray(items) || !items.length || items.length > 10 || items.some(function (item) {
+    return !item || typeof item.de !== 'string' || typeof item.es !== 'string' || !item.de.trim() || !item.es.trim();
+  })) throw new Error('Seleccioná entre 1 y 10 frases con alemán y español completos.');
+  return withLock_(function () {
+    const ss = getSpreadsheet_();
+    const phrases = readTable_(getSheet_(ss));
+    const collections = collectionRows_(readTable_(getCollectionsSheet_(ss), COLLECTION_WIDTH));
+    const collectionIds = requestedCollectionIds_(payload.collectionIds, collections);
+    if (!collectionIds.length) throw new Error('Elegí al menos una colección.');
+    const members = readTable_(getCollectionMembersSheet_(ss), COLLECTION_MEMBER_WIDTH);
+    const known = new Map();
+    phrases.values.forEach(function (row) {
+      if (normalize_(row[COL.ID - 1])) known.set(normalizeKey_(row[COL.DE - 1]), row);
+    });
+    const associations = new Set();
+    const positions = new Map();
+    members.values.forEach(function (row) {
+      const key = collectionIdKey_(row[0]);
+      associations.add(key + ':' + collectionIdKey_(row[1]));
+      positions.set(key, Math.max(positions.get(key) || 0, Number(row[2]) || 0));
+    });
+    const additions = [];
+    const links = [];
+    const now = new Date();
+    let lastId = lastIdNumber_(phrases);
+    const results = items.map(function (item) {
+      const key = normalizeKey_(item.de);
+      let row = known.get(key);
+      const reused = !!row;
+      if (!row) {
+        row = [formatId_(++lastId), item.de.trim(), item.es.trim(), '', DEFAULT_STATUS, '', now, now, ''];
+        known.set(key, row);
+        additions.push(row);
+      }
+      collectionIds.forEach(function (id) {
+        const collectionKey = collectionIdKey_(id);
+        const association = collectionKey + ':' + collectionIdKey_(row[0]);
+        if (associations.has(association)) return;
+        const position = (positions.get(collectionKey) || 0) + 1;
+        links.push([id, row[0], position]);
+        positions.set(collectionKey, position);
+        associations.add(association);
+      });
+      return { item: rowToObject_(row), reused: reused };
+    });
+    results.forEach(function (result) {
+      result.collectionIds = collections.items.filter(function (collection) {
+        return associations.has(collectionIdKey_(collection.id) + ':' + collectionIdKey_(result.item.id));
+      }).map(function (collection) { return collection.id; });
+    });
+    let phraseRange;
+    let memberRange;
+    try {
+      if (additions.length) {
+        phraseRange = phrases.sheet.getRange(phrases.lastRow + 1, 1, additions.length, WIDTH);
+        phraseRange.setValues(additions);
+      }
+      if (links.length) {
+        memberRange = members.sheet.getRange(members.lastRow + 1, 1, links.length, COLLECTION_MEMBER_WIDTH);
+        memberRange.setValues(links);
+      }
+      if (additions.length) PropertiesService.getDocumentProperties().setProperty('LAST_ID', String(lastId));
+    } catch (error) {
+      let recoveryFailed = false;
+      [memberRange, phraseRange].forEach(function (range) {
+        try { if (range) range.clearContent(); } catch (rollbackError) { recoveryFailed = true; }
+      });
+      if (recoveryFailed) throw new Error('No se pudo guardar y la recuperación automática falló. Actualizá los datos antes de continuar.');
+      throw error;
+    }
+    return { results: results };
   });
 }
 
