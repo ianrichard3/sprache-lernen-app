@@ -10,7 +10,20 @@ Script porque el próximo push lo reemplaza.
 El workflow usa los secrets `CLASPRC_JSON` y `CLASP_JSON`; no los agregues al
 repositorio.
 
-La web app es privada y usa la planilla de frases configurada en `Code.gs`.
+La web app es privada. En una copia nueva, su proyecto de Apps Script queda
+vinculado al Sheet desde el que abrís **Frases → Abrir frases** por primera vez.
+Esa apertura también permite usar luego la URL de la web app. Si entrás primero
+por la URL de la copia, la app te indica que la abras una vez desde el menú del
+Sheet. El despliegue de producción conserva la planilla original.
+
+Para usar el código en otra planilla, creá su Apps Script desde **Extensiones →
+Apps Script**, copiá `Code.gs`, `Ai.gs` y `App.html`, recargá el Sheet y abrí
+**Frases → Abrir frases**. Elegí el idioma objetivo en la configuración inicial.
+Cada proyecto conserva su propio idioma y su propia planilla; el CI de este
+repositorio sigue desplegando únicamente la instalación alemana original. Si
+querés una URL independiente para la copia, desplegala como web app desde ese
+nuevo proyecto. Configurá también allí `GEMINI_API_KEY` para usar la IA: las
+Script Properties no se copian al pegar el código.
 
 ## Datos y rendimiento
 
@@ -22,7 +35,7 @@ antes de seguir trabajando para traer esos cambios sin pisarlos.
 
 La pantalla **Material** permite previsualizar y editar las frases, y descargar
 HTML con tabla, tipografía grande y espaciado ajustable. También conserva la
-descarga Markdown para usarla con otro editor. Ejecutá **Deutsch → Preparar
+descarga Markdown para usarla con otro editor. Ejecutá **Frases → Preparar
 hoja** una vez para aplicar la columna `Incluida en material`.
 
 ## IA con Gemini
@@ -36,14 +49,15 @@ Apps Script cuando Google lo pida.
 
 ## Audio de colecciones
 
-El reproductor usa la voz alemana instalada en el navegador mediante Web Speech
-API. No requiere API key, facturación ni guarda archivos MP3. Si el dispositivo
-no tiene una voz alemana, la app lo indica y deja el resto de funciones usable.
+El reproductor usa la voz del idioma objetivo instalada en el navegador mediante
+Web Speech API. No requiere API key, facturación ni guarda archivos MP3. Si el dispositivo no tiene una voz
+compatible, la app lo indica y deja el resto de funciones usable.
 
 ## Generador de frases
 
-En **Generar**, escribí una situación o temática para obtener 10 frases de nivel
-B1–B2 en alemán con traducción natural al español, usando la misma clave Gemini.
+En **Generar**, escribí una situación o temática y elegí **Intermedio (B1–B2)**
+o **Avanzado (C1–C2)** para obtener 10 frases en el idioma objetivo con
+traducción natural al español, usando la misma clave Gemini.
 Revisá y editá los resultados, marcá las frases y elegí una o varias colecciones
 existentes. **Agregar seleccionadas** guarda sólo las marcadas en todos los
 destinos elegidos. Si una frase ya existe, conserva su traducción y progreso y

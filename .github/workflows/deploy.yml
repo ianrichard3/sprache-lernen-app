@@ -39,6 +39,7 @@ jobs:
           umask 077
           printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
           printf '%s' "$CLASP_JSON" > .clasp.json
+          printf "const PRODUCTION_SPREADSHEET_ID = '%s';\n" '16iaAw1OpXNF2x2MHjEFVOLzGezdvI73XFDiqE56oQFU' > Production.gs
           npx --yes @google/clasp@3.3.0 show-file-status
           npx --yes @google/clasp@3.3.0 push --force
           npx --yes @google/clasp@3.3.0 create-deployment \

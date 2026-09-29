@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
 <base target="_top">
 <meta charset="utf-8">
@@ -158,7 +158,7 @@
 <body>
 <div id="app">
   <header class="topbar">
-    <div class="brand">Frases en alemán</div>
+    <div class="brand">Frases para estudiar</div>
     <nav aria-label="Secciones">
       <button class="nav" data-act="switch-view" data-view="study">Estudiar</button>
       <button class="nav" data-act="switch-view" data-view="collections">Colecciones</button>
@@ -166,6 +166,7 @@
       <button class="nav" data-act="switch-view" data-view="print">Material</button>
       <button class="nav" data-act="switch-view" data-view="generate">Generar</button>
       <button class="nav" data-act="switch-view" data-view="etymology">Etimología</button>
+      <button class="nav" data-act="switch-view" data-view="settings">Configuración</button>
     </nav>
     <button class="link" data-act="refresh-data">Actualizar datos</button>
   </header>
@@ -179,10 +180,11 @@
 
   var state = {
     loadingData: false,
+    setup: null, language: {name:'alemán', locale:'de-DE', version:0}, languageChoice:'de-DE', customName:'', customLocale:'', configSaving:false, languageBusy:0,
     items: [], history: [], view: 'study', detailId: null, revealed: false,
     saving: false, editing: null, editingCollectionIds: null, studyTab: 'phrases', studyPage: 1, studyQuery: '', managePage: 1, manageQuery: '', importText: '',
     importPreview: null, importHasHeader: true, importDelimiter: ',',
-    generator: { context:'', items:[], collectionIds:[], busy:false, saving:false },
+    generator: { context:'', level:'intermediate', generatedLevel:null, items:[], collectionIds:[], busy:false, saving:false, debug:'' },
     etymologyText: '', etymologyResult: '',
     collections: [], memberIdsByCollection: {}, collectionsLoaded: false, collectionQuery: '', collectionId: null, collection: null, collectionEditor: null, collectionPhraseQuery: '', collectionPage: 1, collectionEditorPage: 1, collectionCandidatePage: 1, collectionSelection: {}, collectionPhraseDraft: false,
     printScope: 'all', printCollectionIds: [], printOnlyUnprinted: false, printOrder: 'manual', printFormat: 'html', printFontSize: 20, printLineHeight: 1.6, printRevision: 0, printGenerating: false, printPreviewLoading: false, printPreview: null, printResult: null,
@@ -196,6 +198,20 @@
     note: document.getElementById('note')
   };
   var ALL_COLLECTION_ID = '__all__';
+  var LANGUAGES = [
+    {name:'alemán', locale:'de-DE'}, {name:'inglés', locale:'en-US'},
+    {name:'francés', locale:'fr-FR'}, {name:'italiano', locale:'it-IT'},
+    {name:'portugués', locale:'pt-BR'}, {name:'japonés', locale:'ja-JP'}
+  ];
+
+  function targetName_() { return state.language.name; }
+
+  function languageDraft_(language) {
+    state.language = language;
+    state.languageChoice = LANGUAGES.some(function (item) { return item.locale === language.locale && item.name === language.name; }) ? language.locale : 'other';
+    state.customName = language.name;
+    state.customLocale = language.locale;
+  }
 
   function collectionKey_(id) { return String(id || '').toUpperCase(); }
 
@@ -281,6 +297,14 @@
   }
 
   function applyAppData_(data) {
+    if (state.language.version !== (data.language || {}).version) {
+      state.generator.items = [];
+      state.generator.generatedLevel = null;
+      state.importPreview = null;
+      state.printPreview = null;
+    }
+    state.setup = null;
+    languageDraft_(data.language || {name:'alemán', locale:'de-DE', version:0});
     state.items = data.items || [];
     state.history = data.history || [];
     state.collections = data.collections || [];
@@ -331,8 +355,10 @@
     if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return null;
     var voices = window.speechSynthesis.getVoices();
     function language(voice) { return String(voice.lang || '').toLowerCase().replace('_', '-'); }
-    var exact = voices.find(function (voice) { return language(voice) === 'de-de'; });
-    return exact || voices.find(function (voice) { return language(voice).indexOf('de') === 0; }) || null;
+    var locale = state.language.locale.toLowerCase();
+    var base = locale.split('-')[0];
+    var exact = voices.find(function (voice) { return language(voice) === locale; });
+    return exact || voices.find(function (voice) { return language(voice).split('-')[0] === base; }) || null;
   }
 
   function phaseDefaults_(phase) {
@@ -437,7 +463,7 @@
     playerVoiceReady_();
     if (progress) progress.textContent = item ? (player.index + 1) + ' de ' + items.length : '';
     if (quick) quick.innerHTML = sessionQuickControlHtml_();
-    if (germanSupport) germanSupport.textContent = recallPhase_() ? (germanVisible_(player.index) ? 'Ocultar alemán' : 'Revelar alemán') : (state.session.supports.german ? 'Ocultar alemán' : 'Mostrar alemán');
+    if (germanSupport) germanSupport.textContent = recallPhase_() ? (germanVisible_(player.index) ? 'Ocultar ' + targetName_() : 'Revelar ' + targetName_()) : (state.session.supports.german ? 'Ocultar ' + targetName_() : 'Mostrar ' + targetName_());
     if (spanishSupport) spanishSupport.textContent = state.session.supports.spanish ? 'Ocultar español' : 'Mostrar español';
     updateSessionRows_(scrollActive);
   }
@@ -457,7 +483,7 @@
     if (!item || !playerVoiceReady_()) return stopPlayer_();
 
     var utterance = new SpeechSynthesisUtterance(item.de);
-    utterance.lang = player.voice.lang || 'de-DE';
+    utterance.lang = player.voice.lang || state.language.locale;
     utterance.voice = player.voice;
     utterance.rate = state.playerSettings.rate;
     utterance.onend = function () {
@@ -481,7 +507,7 @@
     utterance.onerror = function (event) {
       if (!player.playing || token !== player.token || event.error === 'canceled' || event.error === 'interrupted') return;
       stopPlayer_();
-      say('No se pudo reproducir la voz alemana.', 'err');
+      say('No se pudo reproducir la voz en ' + targetName_() + '.', 'err');
     };
     updatePlayerUi_();
     window.speechSynthesis.cancel();
@@ -748,10 +774,10 @@
       content = '<section class="card study-card" id="study-phrases"><button class="link" data-act="back-study">← Volver al listado</button>' +
         '<p class="question">' + esc(item.es || 'Sin traducción') + '</p>' +
         (state.revealed
-          ? '<p class="answer">' + esc(item.de) + '</p>' + (item.notes ? '<p class="notes">' + esc(item.notes) + '</p>' : '') +
+          ? '<p class="answer" lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</p>' + (item.notes ? '<p class="notes">' + esc(item.notes) + '</p>' : '') +
             '<div class="study-actions"><button class="good" data-act="result" data-correct="true"' + (state.saving ? ' disabled' : '') + '>Lo hice bien</button>' +
             '<button class="bad" data-act="result" data-correct="false"' + (state.saving ? ' disabled' : '') + '>Me costó</button><button class="ghost" data-act="edit" data-id="' + esc(item.id) + '">Editar frase</button></div>'
-          : '<div class="study-actions"><button class="primary" data-act="reveal">Ver alemán</button></div>') +
+          : '<div class="study-actions"><button class="primary" data-act="reveal">Ver ' + esc(targetName_()) + '</button></div>') +
         '</section>';
     } else content = studyListPanelHtml();
     el.screen.innerHTML = '<div class="study">' + studyTabsHtml() + content + '</div>';
@@ -771,8 +797,8 @@
     var inCollection = !!collectionId;
     var selectedIds = inCollection ? [collectionId] : (item ? collectionIdsForPhrase_(item.id) : []);
     return '<section class="panel form-panel"><div class="section-head"><h2 class="section-title">' + (item ? 'Editar ' + esc(item.id) : 'Nueva frase') + '</h2></div>' +
-      '<div class="field"><label for="f-de">Frase en alemán</label><textarea id="f-de">' + esc(item ? item.de : '') + '</textarea><div class="ai-actions"><button id="ai-translate-to-es" class="ghost" data-act="translate-to-es">Traducir al español</button></div></div>' +
-      '<div class="field"><label for="f-es">Traducción al español</label><textarea id="f-es">' + esc(item ? item.es : '') + '</textarea><div class="ai-actions"><button id="ai-translate" class="ghost" data-act="translate">Traducir al alemán</button></div></div>' +
+      '<div class="field"><label for="f-de">Frase en ' + esc(targetName_()) + '</label><textarea id="f-de" lang="' + esc(state.language.locale) + '">' + esc(item ? item.de : '') + '</textarea><div class="ai-actions"><button id="ai-translate-to-es" class="ghost" data-act="translate-to-es">Traducir al español</button></div></div>' +
+      '<div class="field"><label for="f-es">Traducción al español</label><textarea id="f-es">' + esc(item ? item.es : '') + '</textarea><div class="ai-actions"><button id="ai-translate" class="ghost" data-act="translate">Traducir a ' + esc(targetName_()) + '</button></div></div>' +
       '<div class="field"><label for="f-notes">Notas</label><input id="f-notes" type="text" value="' + esc(item ? item.notes : '') + '"></div>' +
       '<div class="field"><label for="f-tags">Etiquetas</label><input id="f-tags" type="text" value="' + esc(item ? item.tags.join(', ') : '') + '" placeholder="viaje, trabajo, A2"></div>' +
       (inCollection ? '<p class="hint">Se agregará a ' + esc(collectionById_(collectionId).name) + '.</p>' : phraseCollectionPickerHtml_(selectedIds)) +
@@ -801,12 +827,12 @@
       for (var i = 0; i < preview.data.columnCount; i++) cells += '<td>' + esc(row[i] || '') + '</td>';
       return '<tr>' + cells + '</tr>';
     }).join('') : '';
-    return '<section class="panel import-panel"><h2 class="section-title">Importar CSV / TSV</h2><p class="hint">Pegá el contenido, elegí el separador y mapeá alemán y español.</p>' +
-      '<textarea id="import-text" placeholder="Deutsch,Español\nGuten Morgen,Buenos días">' + esc(state.importText) + '</textarea><div class="import-options">' +
+    return '<section class="panel import-panel"><h2 class="section-title">Importar CSV / TSV</h2><p class="hint">Pegá el contenido, elegí el separador y mapeá ' + esc(targetName_()) + ' y español.</p>' +
+      '<textarea id="import-text" placeholder="' + esc(targetName_()) + ',Español\nFrase,Traducción">' + esc(state.importText) + '</textarea><div class="import-options">' +
       '<label><input type="radio" name="delimiter" value=","' + (state.importDelimiter === ',' ? ' checked' : '') + '> Coma</label>' +
       '<label><input type="radio" name="delimiter" value="tab"' + (state.importDelimiter === '\t' ? ' checked' : '') + '> Tab</label>' +
       '<label><input id="import-header" type="checkbox"' + (state.importHasHeader ? ' checked' : '') + '> Primera fila: encabezados</label></div><button class="ghost" data-act="preview-import">Ver vista previa</button>' +
-      (preview ? '<div class="preview"><div class="mapping"><div><label for="import-de">Columna alemana</label><select id="import-de">' + optionHtml(preview.data.columnCount) + '</select></div>' +
+      (preview ? '<div class="preview"><div class="mapping"><div><label for="import-de">Columna en ' + esc(targetName_()) + '</label><select id="import-de">' + optionHtml(preview.data.columnCount) + '</select></div>' +
         '<div><label for="import-es">Columna española</label><select id="import-es">' + optionHtml(preview.data.columnCount) + '</select></div></div><table><tbody>' + rows + '</tbody></table>' +
         '<div class="form-actions" style="margin-top:12px"><button class="primary" data-act="import">Importar</button></div></div>' : '') + '</section>';
   }
@@ -817,7 +843,7 @@
     var page = paginate(items, state.managePage);
     state.managePage = page.page;
     return page.items.map(function (item) {
-      return '<article class="manage-item"><h3>' + esc(item.de) + '</h3><p>' + esc(item.es || 'Sin traducción') + '</p>' +
+      return '<article class="manage-item"><h3 lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</h3><p>' + esc(item.es || 'Sin traducción') + '</p>' +
         (item.notes ? '<p class="hint">' + esc(item.notes) + '</p>' : '') + '<div class="manage-meta">' +
         item.tags.map(function (tag) { return '<span class="tag">#' + esc(tag) + '</span>'; }).join('') +
         '<label class="print-status"><input type="checkbox" data-print-status data-id="' + esc(item.id) + '"' + (item.printedAt ? ' checked' : '') + '> Incluida en material</label>' +
@@ -832,7 +858,7 @@
   }
 
   function renderManage() {
-    el.screen.innerHTML = '<div class="manage-grid"><section><div class="section-head"><h1 class="section-title">Gestionar frases</h1><button class="ghost" data-act="copy">Copiar alemán al azar</button></div>' +
+    el.screen.innerHTML = '<div class="manage-grid"><section><div class="section-head"><h1 class="section-title">Gestionar frases</h1><button class="ghost" data-act="copy">Copiar ' + esc(targetName_()) + ' al azar</button></div>' +
       '<input id="manage-search" type="search" placeholder="Buscar frases…" value="' + esc(state.manageQuery) + '"><div class="card manage-list" id="manage-list">' + manageListHtml() + '</div></section>' +
       '<aside class="manage-side">' + editorHtml() + importHtml() + '</aside></div>';
   }
@@ -992,7 +1018,8 @@
       order:state.printOrder,
       fontSize:state.printFontSize,
       lineHeight:state.printLineHeight,
-      previewSignature:state.printFormat === 'html' && state.printPreview ? state.printPreview.signature || '' : ''
+      previewSignature:state.printFormat === 'html' && state.printPreview ? state.printPreview.signature || '' : '',
+      expectedLanguageVersion:state.language.version
     };
   }
 
@@ -1086,10 +1113,10 @@
   }
 
   function sessionQuickControlHtml_() {
-    if (!currentAudioAvailable_()) return '<span class="muted">Revelá alemán para escuchar.</span>';
+    if (!currentAudioAvailable_()) return '<span class="muted">Revelá la frase para escuchar.</span>';
     var hasVoice = !!player.voice;
     return '<button class="primary" id="player-toggle" data-act="player-toggle"' + (hasVoice ? '' : ' disabled') + '>' + (player.playing ? 'Pausar' : 'Reproducir') + '</button>' +
-      (hasVoice ? '' : '<span class="hint">Sin voz alemana</span>');
+      (hasVoice ? '' : '<span class="hint">Sin voz para ' + esc(targetName_()) + '</span>');
   }
 
   function sessionRowHtml_(item, index) {
@@ -1097,12 +1124,12 @@
     var german = germanVisible_(index);
     var spanish = state.session.supports.spanish;
     var text = '';
-    if (german) text += '<span class="session-row-de">' + esc(item.de) + '</span>';
+    if (german) text += '<span class="session-row-de" lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</span>';
     if (spanish) text += '<span class="session-row-es">' + esc(item.es || 'Sin traducción') + '</span>';
     if (!text) text = '<span class="session-row-meta">Frase ' + (index + 1) + '</span>';
     var action = '';
     if (current && recallPhase_() && !german) {
-      action = '<button class="session-row-play" data-act="toggle-support" data-support="german">Revelar alemán</button>';
+      action = '<button class="session-row-play" data-act="toggle-support" data-support="german">Revelar ' + esc(targetName_()) + '</button>';
     } else if (current) {
       action = '<button class="session-row-play" data-act="player-row-toggle" data-index="' + index + '"' + (player.voice ? '' : ' disabled') + '>' + (player.playing ? 'Pausar' : 'Reproducir') + '</button>';
     }
@@ -1166,14 +1193,14 @@
     state.collectionEditorPage = memberPage.page;
     var members = memberPage.items.map(function (item, index) {
       index += (memberPage.page - 1) * PAGE_SIZE;
-      return '<div class="collection-row"><div><strong>' + esc(item.de) + '</strong><p>' + esc(item.es) + '</p></div><div class="collection-row-actions"><button class="link" data-act="move-collection-phrase" data-id="' + esc(item.id) + '" data-direction="-1"' + (index === 0 ? ' disabled' : '') + '>↑</button><button class="link" data-act="move-collection-phrase" data-id="' + esc(item.id) + '" data-direction="1"' + (index === collection.items.length - 1 ? ' disabled' : '') + '>↓</button><button class="link danger" data-act="remove-collection-phrase" data-id="' + esc(item.id) + '">Quitar</button></div></div>';
+      return '<div class="collection-row"><div><strong lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</strong><p>' + esc(item.es) + '</p></div><div class="collection-row-actions"><button class="link" data-act="move-collection-phrase" data-id="' + esc(item.id) + '" data-direction="-1"' + (index === 0 ? ' disabled' : '') + '>↑</button><button class="link" data-act="move-collection-phrase" data-id="' + esc(item.id) + '" data-direction="1"' + (index === collection.items.length - 1 ? ' disabled' : '') + '>↓</button><button class="link danger" data-act="remove-collection-phrase" data-id="' + esc(item.id) + '">Quitar</button></div></div>';
     }).join('') || '<div class="empty">Todavía no agregaste frases.</div>';
     var candidatePage = paginate(collectionCandidates_(), state.collectionCandidatePage);
     state.collectionCandidatePage = candidatePage.page;
     var selectedCount = selectedCollectionCandidateIds_().length;
     var candidates = candidatePage.items.map(function (item) {
       var selected = !!state.collectionSelection[item.id];
-      return '<label class="collection-row"><input type="checkbox" data-collection-candidate value="' + esc(item.id) + '"' + (selected ? ' checked' : '') + '><div><strong>' + esc(item.de) + '</strong><p>' + esc(item.es) + '</p></div></label>';
+      return '<label class="collection-row"><input type="checkbox" data-collection-candidate value="' + esc(item.id) + '"' + (selected ? ' checked' : '') + '><div><strong lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</strong><p>' + esc(item.es) + '</p></div></label>';
     }).join('') || '<div class="empty">No hay frases para agregar.</div>';
     return '<section><div class="section-head"><h1 class="section-title">Editar colección</h1><button class="link danger" data-act="delete-collection">Borrar colección</button></div><div class="field" style="max-width:620px"><label for="collection-name">Nombre</label><input id="collection-name" type="text" value="' + esc(collection.collection.name) + '"></div><div class="form-actions" style="justify-content:flex-start; margin-bottom:20px"><button class="primary" data-act="save-collection">Guardar nombre</button><button class="ghost" data-act="cancel-collection-editor">Volver al reproductor</button></div><div class="collection-editor"><section class="card collection-members"><div class="section-head" style="padding:14px 14px 0"><h2 class="section-title">Frases de la colección</h2><span class="muted">' + collection.items.length + '</span></div>' + members + paginationHtml('collection-editor', memberPage) + '</section><section><div class="section-head"><h2 class="section-title">Agregar frases</h2><button class="ghost" data-act="new-collection-phrase">Nueva frase</button></div><input id="collection-phrase-search" type="search" placeholder="Buscar frases…" value="' + esc(state.collectionPhraseQuery) + '"><div class="card collection-candidates" style="margin-top:12px">' + candidates + paginationHtml('collection-candidates', candidatePage) + '</div><div class="form-actions" style="justify-content:flex-start; margin-top:12px"><button class="primary" data-act="add-selected-collection-phrases"' + (selectedCount ? '' : ' disabled') + '>Agregar seleccionadas (' + selectedCount + ')</button></div></section></div></section>';
   }
@@ -1201,15 +1228,17 @@
       return '<article class="panel" style="margin-top:12px"><label><input type="checkbox" id="generator-select-' + index + '" data-generator-select="' + index + '"' +
         (item.selected ? ' checked' : '') + locked + '> Frase ' + (index + 1) + '</label>' +
         (item.saved ? '<p role="status">' + (item.reused ? 'Agregada usando la frase existente; se conservó su traducción y progreso.' : 'Agregada.') + '</p>' : '') +
-        '<div class="field"><label for="generated-de-' + index + '">Alemán</label><textarea id="generated-de-' + index + '" data-generator-field="de" data-index="' + index + '"' + locked + '>' + esc(item.de) + '</textarea></div>' +
+        '<div class="field"><label for="generated-de-' + index + '">' + esc(targetName_()) + '</label><textarea id="generated-de-' + index + '" lang="' + esc(state.language.locale) + '" data-generator-field="de" data-index="' + index + '"' + locked + '>' + esc(item.de) + '</textarea></div>' +
         '<div class="field"><label for="generated-es-' + index + '">Español</label><textarea id="generated-es-' + index + '" data-generator-field="es" data-index="' + index + '"' + locked + '>' + esc(item.es) + '</textarea></div></article>';
     }).join('');
     el.screen.innerHTML = '<section style="max-width:800px;margin:auto"><h1 class="section-title">Generar frases</h1>' +
-      '<p class="hint">10 frases en alemán B1–B2 con traducción natural al español. Revisalas antes de agregarlas.</p>' +
+      '<p class="hint">10 frases en ' + esc(targetName_()) + ' con traducción natural al español. Revisalas antes de agregarlas.</p>' +
       '<div class="field"><label for="generator-context">Situación o temática</label><textarea id="generator-context" placeholder="Por ejemplo: pedir ayuda con un bug"' + disabled + '>' + esc(draft.context) + '</textarea></div>' +
+      '<div class="field"><label for="generator-level">Nivel de la próxima tanda</label><select id="generator-level"' + disabled + '><option value="intermediate"' + (draft.level === 'intermediate' ? ' selected' : '') + '>Intermedio (B1–B2)</option><option value="advanced"' + (draft.level === 'advanced' ? ' selected' : '') + '>Avanzado (C1–C2)</option></select></div>' +
       '<button class="primary" data-act="generate-phrases"' + disabled + '>' + (draft.items.length ? 'Generar otra tanda' : 'Generar frases') + '</button>' +
       '<p role="status" aria-live="polite">' + (draft.busy ? 'Procesando…' : '') + '</p>' +
-      (draft.items.length ? '<div class="panel"><h2 class="section-title">Colecciones de destino</h2><p class="hint">Las frases seleccionadas se agregan a todas las colecciones que marques.</p>' +
+      (draft.debug ? '<details open class="panel" style="margin-top:12px"><summary>Respuesta de Gemini (diagnóstico)</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto">' + esc(draft.debug) + '</pre></details>' : '') +
+      (draft.items.length ? '<div class="panel"><h2 class="section-title">Colecciones de destino</h2><p class="hint">Tanda generada: ' + (draft.generatedLevel === 'advanced' ? 'Avanzado (C1–C2)' : 'Intermedio (B1–B2)') + '. Las frases seleccionadas se agregan a todas las colecciones que marques.</p>' +
         (destinations ? '<div class="collection-picker">' + destinations + '</div>' : '<p>Creá una colección en Colecciones y volvé. Tu borrador se conserva mientras no recargues la app.</p>') +
         '<div class="form-actions"><button class="ghost" data-act="generator-select-all"' + disabled + '>Seleccionar todas</button><button class="ghost" data-act="generator-select-none"' + disabled + '>Deseleccionar todas</button>' +
         '<button class="primary" data-act="save-generated"' + (draft.busy || !selected || !draft.collectionIds.length ? ' disabled' : '') + '>Agregar seleccionadas (' + selected + ')</button></div></div>' + rows : '') + '</section>';
@@ -1222,18 +1251,24 @@
     if (draft.busy) return;
     if (!draft.context.trim()) return say('Escribí una situación o temática.', 'err');
     if (draft.items.some(function (item) { return !item.saved; }) && !confirm('¿Descartar los borradores sin guardar cuando esté lista la nueva tanda?')) return;
+    var level = draft.level;
+    draft.debug = '';
     draft.busy = true;
     renderGenerator();
     google.script.run.withSuccessHandler(function (items) {
       draft.items = items.map(function (item) { return { de:item.de, es:item.es, selected:false, saved:false }; });
+      draft.generatedLevel = level;
+      draft.debug = '';
       draft.busy = false;
       if (state.view === 'generate') renderGenerator();
       say('10 frases listas para revisar.');
     }).withFailureHandler(function (err) {
       draft.busy = false;
+      var parts = String(err.message || '').split('\n\nRespuesta de Gemini:\n');
+      draft.debug = parts.length > 1 ? parts.slice(1).join('\n\nRespuesta de Gemini:\n') : '';
       if (state.view === 'generate') renderGenerator();
-      say(err.message, 'err');
-    }).generatePhrases(draft.context);
+      say(parts[0], 'err');
+    }).generatePhrases(draft.context, level, state.language.version);
   }
 
   function saveGeneratedPhrases_() {
@@ -1242,7 +1277,7 @@
     if (state.loadingData) return say('Esperá a que termine la actualización antes de guardar.', 'err');
     var selected = draft.items.filter(function (item) { return item.selected && !item.saved; });
     if (!selected.length || !draft.collectionIds.length) return say('Elegí frases y al menos una colección.', 'err');
-    if (selected.some(function (item) { return !item.de.trim() || !item.es.trim(); })) return say('Completá el alemán y español de las frases seleccionadas.', 'err');
+    if (selected.some(function (item) { return !item.de.trim() || !item.es.trim(); })) return say('Completá ' + targetName_() + ' y español de las frases seleccionadas.', 'err');
     draft.busy = true;
     draft.saving = true;
     renderGenerator();
@@ -1269,23 +1304,73 @@
       draft.saving = false;
       if (state.view === 'generate') renderGenerator();
       say(err.message, 'err');
-    }).saveGeneratedPhrases({ items:selected.map(function (item) { return { de:item.de, es:item.es }; }), collectionIds:draft.collectionIds.slice() });
+    }).saveGeneratedPhrases({ items:selected.map(function (item) { return { de:item.de, es:item.es }; }), collectionIds:draft.collectionIds.slice(), expectedLanguageVersion:state.language.version });
   }
 
   function renderEtymology() {
     var result = state.etymologyResult;
     el.screen.innerHTML = '<section class="panel form-panel" style="max-width:720px"><div class="section-head"><h1 class="section-title">Etimología</h1></div>' +
       '<p class="hint">Analizá una palabra o frase sin guardarla en tu registro.</p>' +
-      '<div class="field"><label for="etymology-source">Palabra o frase</label><textarea id="etymology-source" placeholder="zum Beispiel: verstehen">' + esc(state.etymologyText) + '</textarea></div>' +
+      '<div class="field"><label for="etymology-source">Palabra o frase</label><textarea id="etymology-source" placeholder="Escribí una palabra o frase">' + esc(state.etymologyText) + '</textarea></div>' +
       '<div class="ai-actions"><button id="ai-etymology" class="ghost" data-act="etymology">Analizar etimología</button></div>' +
       '<div id="ai-etymology-result" class="ai-result" role="status" aria-live="polite"' + (result ? '' : ' hidden') + '>' + esc(result) + '</div></section>';
   }
 
+  function renderSettings() {
+    if (state.setup === 'sheet') {
+      el.screen.innerHTML = '<section class="panel form-panel" style="max-width:640px;margin:auto"><h1 class="section-title">Vincular la planilla</h1>' +
+        '<p>Abrí esta app una vez desde el menú <strong>Frases → Abrir frases</strong> de tu Google Sheet. Después podrás usar también la web app.</p></section>';
+      return;
+    }
+    var options = LANGUAGES.map(function (language) {
+      return '<option value="' + language.locale + '"' + (state.languageChoice === language.locale ? ' selected' : '') + '>' + esc(language.name.charAt(0).toUpperCase() + language.name.slice(1)) + '</option>';
+    }).join('');
+    el.screen.innerHTML = '<section class="panel form-panel" style="max-width:640px;margin:auto"><h1 class="section-title">' +
+      (state.setup ? 'Configuración inicial' : 'Configuración') + '</h1><p class="hint">Elegí el idioma de las frases. La traducción será al español. Las frases que ya existan no se traducirán.</p>' +
+      '<div class="field" style="margin-top:16px"><label for="language-choice">Idioma objetivo</label><select id="language-choice"' + (state.configSaving ? ' disabled' : '') + '>' + options +
+      '<option value="other"' + (state.languageChoice === 'other' ? ' selected' : '') + '>Otro</option></select></div>' +
+      (state.languageChoice === 'other' ? '<div class="field"><label for="language-name">Nombre del idioma</label><input id="language-name" type="text" maxlength="40" value="' + esc(state.customName) + '" placeholder="Por ejemplo: neerlandés"' + (state.configSaving ? ' disabled' : '') + '></div>' +
+        '<div class="field"><label for="language-locale">Código de voz</label><input id="language-locale" type="text" value="' + esc(state.customLocale) + '" placeholder="Por ejemplo: nl-NL"' + (state.configSaving ? ' disabled' : '') + '><p class="hint">Usá un código de idioma y región, como fr-FR.</p></div>' : '') +
+      (!state.setup && state.items.length ? '<p class="hint">Si cambiás el idioma, las frases guardadas seguirán como están. La voz y las herramientas usarán el nuevo idioma.</p>' : '') +
+      '<div class="form-actions" style="justify-content:flex-start"><button class="primary" data-act="save-language"' + (state.configSaving ? ' disabled' : '') + '>Guardar idioma</button></div></section>';
+  }
+
+  function saveLanguageSettings_() {
+    if (state.configSaving) return;
+    if (state.loadingData) return say('Esperá a que termine la actualización.', 'err');
+    if (state.generator.busy) return say('Esperá a que termine la generación o el guardado.', 'err');
+    if (state.printGenerating || state.printPreviewLoading || state.languageBusy) return say('Esperá a que terminen las operaciones pendientes.', 'err');
+    var selected = LANGUAGES.find(function (language) { return language.locale === state.languageChoice; });
+    var language = selected || {name:state.customName.trim(), locale:state.customLocale.trim()};
+    if (!language.name || !language.locale) return say('Completá el idioma y su código de voz.', 'err');
+    var changed = language.name !== state.language.name || language.locale !== state.language.locale;
+    if (!state.setup && changed && (state.items.length || state.generator.items.length) &&
+        !confirm('Las frases existentes no se traducirán y los borradores generados se descartarán. ¿Cambiar el idioma objetivo?')) return;
+    state.configSaving = true;
+    renderSettings();
+    google.script.run.withSuccessHandler(function (savedLanguage) {
+      state.configSaving = false;
+      state.setup = null;
+      if (changed) { state.generator.items = []; state.generator.generatedLevel = null; state.importPreview = null; }
+      languageDraft_(savedLanguage);
+      stopPlayer_();
+      reload(function () { render(); say('Idioma guardado.'); });
+    }).withFailureHandler(function (err) {
+      state.configSaving = false;
+      renderSettings();
+      say(err.message, 'err');
+    }).saveLanguageSettings({name:language.name, locale:language.locale, expectedVersion:state.language.version});
+  }
+
   function render() {
+    document.querySelector('.brand').textContent = state.setup ? 'Frases para estudiar' : 'Frases en ' + targetName_();
+    document.querySelector('nav').style.display = state.setup ? 'none' : '';
+    document.querySelector('[data-act="refresh-data"]').style.display = state.setup ? 'none' : '';
+    if (state.setup) return renderSettings();
     Array.prototype.forEach.call(document.querySelectorAll('.nav'), function (button) {
       button.className = 'nav' + (button.dataset.view === state.view ? ' on' : '');
     });
-    if (state.view === 'study') renderStudy(); else if (state.view === 'collections') renderCollections(); else if (state.view === 'manage') renderManage(); else if (state.view === 'print') renderPrint(); else if (state.view === 'generate') renderGenerator(); else renderEtymology();
+    if (state.view === 'study') renderStudy(); else if (state.view === 'collections') renderCollections(); else if (state.view === 'manage') renderManage(); else if (state.view === 'print') renderPrint(); else if (state.view === 'generate') renderGenerator(); else if (state.view === 'settings') renderSettings(); else renderEtymology();
   }
 
   function openCollection(id) {
@@ -1409,12 +1494,14 @@
     var collectionIds = state.collectionPhraseDraft ? [state.collectionId] : Array.prototype.map.call(
       document.querySelectorAll('input[name="phrase-collection"]:checked'), function (input) { return input.value; }
     );
-    var payload = { id:id, de:document.getElementById('f-de').value, es:document.getElementById('f-es').value,
+    var payload = { id:id, de:document.getElementById('f-de').value, es:document.getElementById('f-es').value, expectedLanguageVersion:state.language.version,
       notes:document.getElementById('f-notes').value, tags:document.getElementById('f-tags').value,
       expectedUpdated:id && byId(id) ? byId(id).updated : '', expectedCollectionIds:id ? (state.editingCollectionIds || []) : [], collectionIds:collectionIds };
-    if (!payload.de.trim()) return say('Escribí la frase en alemán antes de guardar.', 'err');
+    if (!payload.de.trim()) return say('Escribí la frase en ' + targetName_() + ' antes de guardar.', 'err');
     var fromCollection = state.collectionPhraseDraft;
+    state.languageBusy++;
     google.script.run.withSuccessHandler(function (result) {
+      state.languageBusy--;
       clearPrintResult_();
       var item = result.item;
       if (id) state.items[state.items.indexOf(byId(id))] = item; else state.items.unshift(item);
@@ -1427,7 +1514,7 @@
       } else { state.editing = null; state.editingCollectionIds = null; }
       render();
       say(id ? 'Cambios guardados.' : 'Frase agregada.');
-    }).withFailureHandler(function (err) { say(err.message, 'err'); }).savePhrase(payload);
+    }).withFailureHandler(function (err) { state.languageBusy--; say(err.message, 'err'); }).savePhrase(payload);
   }
 
   function restoreAiButton(button, label) {
@@ -1443,27 +1530,32 @@
     if (!source.value.trim()) return say('Escribí la frase en español antes de traducir.', 'err');
     button.disabled = true;
     button.textContent = 'Traduciendo…';
+    state.languageBusy++;
     google.script.run.withSuccessHandler(function (translation) {
+      state.languageBusy--;
       if (document.body.contains(button)) {
         var target = document.getElementById('f-de');
         if (target) target.value = translation;
       }
-      restoreAiButton(button, 'Traducir al alemán');
-      say('Propuesta en alemán lista.');
+      restoreAiButton(button, 'Traducir a ' + targetName_());
+      say('Propuesta en ' + targetName_() + ' lista.');
     }).withFailureHandler(function (err) {
-      restoreAiButton(button, 'Traducir al alemán');
+      state.languageBusy--;
+      restoreAiButton(button, 'Traducir a ' + targetName_());
       say(err.message, 'err');
-    }).suggestGermanTranslation(source.value);
+    }).suggestGermanTranslation(source.value, state.language.version);
   }
 
   function translateToSpanish() {
     var source = document.getElementById('f-de');
     var button = document.getElementById('ai-translate-to-es');
     if (!source || !button) return;
-    if (!source.value.trim()) return say('Escribí la frase en alemán antes de traducir.', 'err');
+    if (!source.value.trim()) return say('Escribí la frase en ' + targetName_() + ' antes de traducir.', 'err');
     button.disabled = true;
     button.textContent = 'Traduciendo…';
+    state.languageBusy++;
     google.script.run.withSuccessHandler(function (translation) {
+      state.languageBusy--;
       if (document.body.contains(button)) {
         var target = document.getElementById('f-es');
         if (target) target.value = translation;
@@ -1471,9 +1563,10 @@
       restoreAiButton(button, 'Traducir al español');
       say('Propuesta en español lista.');
     }).withFailureHandler(function (err) {
+      state.languageBusy--;
       restoreAiButton(button, 'Traducir al español');
       say(err.message, 'err');
-    }).suggestSpanishTranslation(source.value);
+    }).suggestSpanishTranslation(source.value, state.language.version);
   }
 
   function showEtymology() {
@@ -1481,7 +1574,7 @@
     var button = document.getElementById('ai-etymology');
     var result = document.getElementById('ai-etymology-result');
     if (!source || !button || !result) return;
-    if (!source.value.trim()) return say('Escribí la palabra o frase en alemán antes de analizarla.', 'err');
+    if (!source.value.trim()) return say('Escribí la palabra o frase antes de analizarla.', 'err');
     state.etymologyText = source.value;
     state.etymologyResult = '';
     button.disabled = true;
@@ -1548,9 +1641,11 @@
     if (!preview || preview.text !== settings.text || preview.delimiter !== settings.delimiter) {
       return say('Actualizá la vista previa antes de importar.', 'err');
     }
-    var payload = { text:settings.text, delimiter:settings.delimiter, hasHeader:settings.hasHeader,
+    var payload = { text:settings.text, delimiter:settings.delimiter, hasHeader:settings.hasHeader, expectedLanguageVersion:state.language.version,
       deColumn:Number(document.getElementById('import-de').value), esColumn:Number(document.getElementById('import-es').value) };
+    state.languageBusy++;
     google.script.run.withSuccessHandler(function (result) {
+      state.languageBusy--;
       state.importText = '';
       state.importPreview = null;
       state.importHasHeader = true;
@@ -1560,7 +1655,7 @@
       decorateCollections_();
       render();
       say(result.imported + ' importadas; ' + result.duplicate + ' duplicadas y ' + result.empty + ' vacías omitidas.');
-    }).withFailureHandler(function (err) { say(err.message, 'err'); }).importPhrases(payload);
+    }).withFailureHandler(function (err) { state.languageBusy--; say(err.message, 'err'); }).importPhrases(payload);
   }
 
   function reload(done, preservePrint) {
@@ -1569,6 +1664,11 @@
     state.loadingData = true;
     google.script.run.withSuccessHandler(function (data) {
       state.loadingData = false;
+      if (data.setup) {
+        state.setup = data.setup;
+        if (data.language) languageDraft_(data.language);
+        return render();
+      }
       applyAppData_(data);
       if (!preservePrint) clearPrintResult_();
       if (done) done(); else render();
@@ -1582,6 +1682,8 @@
     var button = event.target.closest('[data-act]');
     if (!button) return;
     var act = button.dataset.act;
+    if (state.configSaving && act !== 'save-language') return;
+    if (act === 'save-language') return saveLanguageSettings_();
     if (act === 'generate-phrases') return generatePhrases_();
     if (act === 'save-generated') return saveGeneratedPhrases_();
     if (act === 'generator-select-all' || act === 'generator-select-none') {
@@ -1691,6 +1793,8 @@
 
   el.app.addEventListener('input', function (event) {
     if (event.target.id === 'generator-context') state.generator.context = event.target.value;
+    else if (event.target.id === 'language-name') state.customName = event.target.value;
+    else if (event.target.id === 'language-locale') state.customLocale = event.target.value;
     else if (event.target.matches('[data-generator-field]')) state.generator.items[Number(event.target.dataset.index)][event.target.dataset.generatorField] = event.target.value;
     else if (event.target.id === 'manage-search') { state.manageQuery = event.target.value; state.managePage = 1; renderManageList(); }
     else if (event.target.id === 'study-search') { state.studyQuery = event.target.value; state.studyPage = 1; renderStudyList(); }
@@ -1712,7 +1816,16 @@
     }
   });
   el.app.addEventListener('change', function (event) {
-    if (event.target.matches('[data-generator-select]')) {
+    if (event.target.id === 'language-choice') {
+      state.languageChoice = event.target.value;
+      if (state.languageChoice === 'other' && LANGUAGES.some(function (item) { return item.locale === state.customLocale; })) {
+        state.customName = '';
+        state.customLocale = '';
+      }
+      return renderSettings();
+    } else if (event.target.id === 'generator-level') {
+      state.generator.level = event.target.value;
+    } else if (event.target.matches('[data-generator-select]')) {
       state.generator.items[Number(event.target.dataset.generatorSelect)].selected = event.target.checked;
       return renderGenerator();
     } else if (event.target.matches('[data-generator-collection]')) {

@@ -198,10 +198,11 @@ toggleSupport.toggleSupport_('german');
 assert.equal(toggleSupport.state.session.revealedIndex, 0);
 
 const sessionRow = Function(
-  "var state = {session:{phase:'listen', supports:{german:false, spanish:false}, revealedIndex:null}};\n" +
+  "var state = {language:{locale:'de-DE'}, session:{phase:'listen', supports:{german:false, spanish:false}, revealedIndex:null}};\n" +
   "var player = {index:0, playing:false, voice:{}};\n" +
   "function recallPhase_() { return state.session.phase === 'recall'; }\n" +
   "function germanVisible_(index) { return recallPhase_() ? state.session.revealedIndex === index : state.session.supports.german; }\n" +
+  "function targetName_() { return 'alemán'; }\n" +
   "function esc(value) { return String(value); }\n" +
   between(html, '  function sessionRowHtml_(item, index) {', '\n\n  function sessionListHtml_') +
   '\nreturn {state:state, row:sessionRowHtml_};'
@@ -246,7 +247,7 @@ function generatorBackend() {
   const memberSheet = sheet(memberRows, true);
   const collectionSheet = sheet([['C1', 'Uno', '', ''], ['C2', 'Dos', '', '']]);
   const run = Function('phraseSheet', 'memberSheet', 'collectionSheet', `
-    const PropertiesService = {getDocumentProperties: () => ({getProperty: () => '1', setProperty: () => {}})};
+    const PropertiesService = {getDocumentProperties: () => ({getProperty: () => '1', setProperty: () => {}}), getScriptProperties: () => ({getProperty: () => null})};
     ${code}
     getSpreadsheet_ = () => ({});
     getSheet_ = () => phraseSheet;
@@ -258,7 +259,9 @@ function generatorBackend() {
   return {run, phraseRows, memberRows, fail(rollback = false) { failLinks = true; failRecovery = rollback; }};
 }
 const generated = generatorBackend();
-const batch = {items:[{de:'Hallo', es:'No sobrescribir'}, {de:'Guten Tag', es:'Buen día'}, {de:'Guten Tag!', es:'Otra'}], collectionIds:['C2']};
+const batch = {items:[{de:'Hallo', es:'No sobrescribir'}, {de:'Guten Tag', es:'Buen día'}, {de:'Guten Tag!', es:'Otra'}], collectionIds:['C2'], expectedLanguageVersion:0};
+assert.throws(() => generated.run({...batch, expectedLanguageVersion:1}), /idioma cambió/);
+assert.equal(generated.phraseRows.length, 1);
 const saved = generated.run(batch);
 assert.equal(generated.phraseRows.length, 2);
 assert.equal(generated.memberRows.length, 3);
@@ -270,13 +273,13 @@ generated.run(batch);
 assert.equal(generated.phraseRows.length, 2);
 assert.equal(generated.memberRows.length, 3);
 const multiple = generatorBackend();
-multiple.run({items:[{de:'Neu', es:'Nueva'}], collectionIds:['C1', 'C2']});
+multiple.run({items:[{de:'Neu', es:'Nueva'}], collectionIds:['C1', 'C2'], expectedLanguageVersion:0});
 assert.deepEqual(multiple.memberRows.slice(1).map(row => [row[0], row[2]]), [['C1', 2], ['C2', 1]]);
 for (const invalid of [
-  {items:[], collectionIds:['C1']},
-  {items:[{de:'Neu', es:''}], collectionIds:['C1']},
-  {items:[{de:'Neu', es:'Nueva'}], collectionIds:[]},
-  {items:[{de:'Neu', es:'Nueva'}], collectionIds:['deleted']}
+  {items:[], collectionIds:['C1'], expectedLanguageVersion:0},
+  {items:[{de:'Neu', es:''}], collectionIds:['C1'], expectedLanguageVersion:0},
+  {items:[{de:'Neu', es:'Nueva'}], collectionIds:[], expectedLanguageVersion:0},
+  {items:[{de:'Neu', es:'Nueva'}], collectionIds:['deleted'], expectedLanguageVersion:0}
 ]) {
   const backend = generatorBackend();
   assert.throws(() => backend.run(invalid));

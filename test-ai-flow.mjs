@@ -23,34 +23,49 @@ assert.equal(extractGeminiText({steps: [{type: 'model_output', content: []}]}), 
 assert.equal(extractGeminiText({}), '');
 
 const suggestSpanishTranslation = Function(
-  "const SPANISH_TRANSLATION_INSTRUCTION = 'Traducí del alemán al español.';\n" +
+  "function targetLanguage_() { return {name:'alemán', locale:'de-DE'}; }\n" +
+  "function assertLanguageVersion_() {}\n" +
   "function normalize_(value) { return String(value == null ? '' : value).trim(); }\n" +
   "function geminiText_(instruction, input) { return instruction + '\\n' + input; }\n" +
-  between(code, 'function suggestSpanishTranslation(text) {', '\n\nfunction analyzeEtymology') +
+  between(code, 'function suggestSpanishTranslation(text, expectedLanguageVersion) {', '\n\nfunction analyzeEtymology') +
   '\nreturn suggestSpanishTranslation;'
 )();
 assert.equal(
   suggestSpanishTranslation(' Guten Morgen '),
-  'Traducí del alemán al español.\nTexto en alemán:\nGuten Morgen'
+  'Traducí del alemán al español natural para estudiar. Devolvé únicamente la traducción española, sin comillas, explicaciones ni alternativas.\nTexto en alemán:\nGuten Morgen'
 );
 assert.throws(() => suggestSpanishTranslation('  '), /frase en alemán/);
 
 console.log('Gemini response parsing: OK');
 
-const generation = Function('geminiText_', code.slice(code.indexOf('function generatePhrases(context)')) + '\nreturn generatePhrases;');
+const generation = Function('geminiText_', "function targetLanguage_() { return {name:'alemán', locale:'de-DE'}; }\nfunction assertLanguageVersion_() {}\n" + code.slice(code.indexOf('function generatePhrases(context, level, expectedLanguageVersion)')) + '\nreturn generatePhrases;');
 const phrases = Array.from({length:10}, (_, i) => ({de:` Satz ${i} `, es:` Frase ${i} `}));
-assert.deepEqual(generation(() => JSON.stringify(phrases))('Trenes'), phrases.map(({de, es}) => ({de:de.trim(), es:es.trim()})));
+const aiPhrases = phrases.map(({de, es}) => ({target:de, es}));
+assert.deepEqual(generation(() => JSON.stringify(aiPhrases))('Trenes'), phrases.map(({de, es}) => ({de:de.trim(), es:es.trim()})));
 assert.throws(() => generation(() => '[]')('Trenes'), /10 frases/);
-assert.throws(() => generation(() => 'No JSON')('Trenes'), /inválidas/);
-assert.throws(() => generation(() => JSON.stringify(phrases.map(() => ({de:'Hallo', es:''}))))('Trenes'), /10 frases/);
+assert.throws(() => generation(() => 'No JSON')('Trenes'), /Respuesta de Gemini:\nNo JSON/);
+assert.throws(() => generation(() => JSON.stringify(aiPhrases.map(() => ({target:'Hallo', es:''}))))('Trenes'), /10 frases/);
+assert.deepEqual(generation(() => JSON.stringify(phrases))('Trenes'), phrases.map(({de, es}) => ({de:de.trim(), es:es.trim()})));
+assert.deepEqual(generation(() => JSON.stringify(aiPhrases.map(({target, es}) => ({ja:target, es}))))('Trenes'), phrases.map(({de, es}) => ({de:de.trim(), es:es.trim()})));
 assert.throws(() => generation(() => { throw new Error('Proveedor caído'); })('Trenes'), /Proveedor caído/);
 assert.throws(() => generation(() => { assert.fail('No debe llamar a Gemini'); })('  '), /temática/);
+let advancedInstruction = '';
+const frenchGeneration = Function('geminiText_', "function targetLanguage_() { return {name:'francés', locale:'fr-FR'}; }\nfunction assertLanguageVersion_() {}\n" + code.slice(code.indexOf('function generatePhrases(context, level, expectedLanguageVersion)')) + '\nreturn generatePhrases;')((instruction) => {
+  advancedInstruction = instruction;
+  return JSON.stringify(aiPhrases);
+});
+frenchGeneration('Trenes', 'advanced');
+assert.match(advancedInstruction, /francés de nivel C1–C2/);
+assert.match(advancedInstruction, /campos target y es/);
+assert.throws(() => frenchGeneration('Trenes', 'invalid'), /intermedio o avanzado/);
 console.log('Phrase generation validation: OK');
 
 // Client flow: selection, errors and callbacks while another screen is open.
 const html = readFileSync('App.html', 'utf8');
+assert.match(html, /Nivel de la próxima tanda/);
+assert.match(html, /Tanda generada:/);
 function generatorClient() {
-  const state = {loadingData:false, view:'generate', items:[], generator:{context:'Trenes', items:[], collectionIds:['C1', 'C2'], busy:false, saving:false}};
+  const state = {loadingData:false, view:'generate', language:{version:0}, items:[], generator:{context:'Trenes', level:'intermediate', generatedLevel:null, items:[], collectionIds:['C1', 'C2'], busy:false, saving:false, debug:''}};
   let success, failure, sent, confirmation = true, renders = 0;
   const run = {
     withSuccessHandler(callback) { success = callback; return this; },
@@ -68,24 +83,26 @@ function generatorClient() {
     function decorateCollections_() {}
     function refreshOpenCollection_() {}
     function clearPrintResult_() { state.printPreview = null; }
+    function targetName_() { return 'alemán'; }
     function applyAppData_(data) { state.items = data.items; }
     ${between(html, '  function generatePhrases_()', '  function renderEtymology()')}
     ${between(html, '  function reload(done, preservePrint)', '\n\n  el.app.addEventListener')}
     return {generatePhrases_, saveGeneratedPhrases_, reload};
   `.replaceAll('rendered();', 'google.rendered();'))(state, {script:{run}, rendered() { renders++; }}, () => confirmation);
-  return {state, ...methods, success(value) { success(value); }, failure() { failure({message:'Error'}); }, sent:() => sent, renders:() => renders, cancel() { confirmation = false; }};
+  return {state, ...methods, success(value) { success(value); }, failure(message = 'Error') { failure({message}); }, sent:() => sent, renders:() => renders, cancel() { confirmation = false; }};
 }
 const client = generatorClient();
 client.generatePhrases_();
 assert.equal(client.state.generator.busy, true);
 client.success(phrases);
 assert.equal(client.state.generator.items.length, 10);
+assert.equal(client.state.generator.generatedLevel, 'intermediate');
 assert.ok(client.state.generator.items.every(item => !item.selected));
 client.state.generator.items[1].selected = true;
 client.state.generator.items[1].de = 'Editada DE';
 client.state.generator.items[1].es = 'Editada ES';
 client.saveGeneratedPhrases_();
-assert.deepEqual(client.sent(), {items:[{de:'Editada DE', es:'Editada ES'}], collectionIds:['C1', 'C2']});
+assert.deepEqual(client.sent(), {items:[{de:'Editada DE', es:'Editada ES'}], collectionIds:['C1', 'C2'], expectedLanguageVersion:0});
 client.failure();
 assert.equal(client.state.generator.busy, false);
 assert.equal(client.state.generator.items[1].de, 'Editada DE');
@@ -97,8 +114,9 @@ assert.equal(client.state.generator.items[1].es, 'Existente ES');
 assert.equal(client.state.generator.items[0].saved, false);
 const beforeFailure = client.state.generator.items;
 client.generatePhrases_();
-client.failure();
+client.failure('La IA devolvió JSON inválido.\n\nRespuesta de Gemini:\n```json\n[]\n```');
 assert.equal(client.state.generator.items, beforeFailure);
+assert.equal(client.state.generator.debug, '```json\n[]\n```');
 client.cancel();
 client.generatePhrases_();
 assert.equal(client.state.generator.busy, false);

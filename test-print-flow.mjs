@@ -107,6 +107,7 @@ assert.equal(printMarkdownCell('<x> &'), '&lt;x&gt; &amp;');
 const printMarkdown = Function(
   "const Session = {getScriptTimeZone: () => 'TZ'};\n" +
   "const Utilities = {formatDate: () => 'FECHA'};\n" +
+  "function languageHeading_() { return 'Deutsch'; }\n" +
   'function normalize_(value) { return String(value == null ? \'\' : value).trim(); }\n' +
   between(code, 'function printMarkdownCell_(value) {', '\n\nfunction printMarkdown_') +
   between(code, 'function printMarkdown_(plan, now) {', '\n\nfunction printFileName_') +
@@ -120,6 +121,8 @@ assert.equal(printMarkdown({count: 1, rowCount: 2, groups: [
 const printHtml = Function(
   "const Session = {getScriptTimeZone: () => 'TZ'};\n" +
   "const Utilities = {formatDate: () => 'FECHA'};\n" +
+  "function languageHeading_() { return 'Deutsch'; }\n" +
+  "function targetLanguage_() { return {locale:'de-DE'}; }\n" +
   'function normalize_(value) { return String(value == null ? \'\' : value).trim(); }\n' +
   between(code, 'function printHtmlCell_(value) {', '\n\nfunction printHtmlBody_') +
   between(code, 'function printHtmlBody_(plan, now) {', '\n\nfunction printHtmlDocument_') +
@@ -131,6 +134,57 @@ const htmlMaterial = printHtml({count: 1, rowCount: 1, groups: [
 assert.match(htmlMaterial, /&lt;Ich&gt;/);
 assert.match(htmlMaterial, /Estoy &amp; bien/);
 assert.match(htmlMaterial, /<table>[\s\S]*<th>Deutsch<\/th>/);
+
+const frenchHtml = Function(
+  "const Session = {getScriptTimeZone: () => 'TZ'};\n" +
+  "const Utilities = {formatDate: () => 'FECHA'};\n" +
+  "function languageHeading_() { return 'Francés'; }\n" +
+  "function targetLanguage_() { return {locale:'fr-FR'}; }\n" +
+  'function normalize_(value) { return String(value == null ? \'\' : value).trim(); }\n' +
+  between(code, 'function printHtmlCell_(value) {', '\n\nfunction printHtmlBody_') +
+  between(code, 'function printHtmlBody_(plan, now) {', '\n\nfunction printHtmlDocument_') +
+  '\nreturn printHtmlBody_;'
+)();
+assert.match(frenchHtml({count:1, rowCount:1, groups:[{name:'Viaje', items:[{de:'Bonjour', es:'Hola'}]}]}, new Date()), /<th>Francés<\/th>[\s\S]*<td lang="fr-FR">Bonjour<\/td>/);
+
+const properties = new Map();
+const bound = Function('PropertiesService', 'SpreadsheetApp',
+  "const SPREADSHEET_ID_PROPERTY = 'APP_SPREADSHEET_ID';\n" +
+  between(code, 'function getSpreadsheet_() {', '\n\nfunction targetLanguage_()') +
+  '\nreturn {registerSpreadsheet_, getSpreadsheet_};'
+)({getScriptProperties:() => ({getProperty:key => properties.get(key), setProperty:(key, value) => properties.set(key, value)})},
+  {getActiveSpreadsheet:() => ({getId:() => 'NEW-SHEET'}), openById:id => ({id})});
+assert.throws(() => bound.getSpreadsheet_(), /menú Frases/);
+bound.registerSpreadsheet_();
+assert.equal(bound.getSpreadsheet_().id, 'NEW-SHEET');
+
+const production = Function('PropertiesService', 'SpreadsheetApp',
+  "const SPREADSHEET_ID_PROPERTY = 'APP_SPREADSHEET_ID'; const PRODUCTION_SPREADSHEET_ID = 'PRODUCTION-SHEET';\n" +
+  between(code, 'function getSpreadsheet_() {', '\n\nfunction targetLanguage_()') +
+  '\nreturn getSpreadsheet_;'
+)({getScriptProperties:() => ({getProperty:() => null})}, {openById:id => ({id})});
+assert.equal(production().id, 'PRODUCTION-SHEET');
+
+let targetHeader = '';
+let failHeader = false;
+const saveLanguage = Function('PropertiesService', 'getSpreadsheet_',
+  "const LANGUAGE_PROPERTY = 'APP_TARGET_LANGUAGE'; const SHEET_NAME = 'Frases'; const COL = {DE:2};\n" +
+  "function normalize_(value) { return String(value == null ? '' : value).trim(); }\n" +
+  "function withLock_(callback) { return callback(); }\n" +
+  "function targetLanguage_() { const saved = PropertiesService.getScriptProperties().getProperty(LANGUAGE_PROPERTY); return saved ? JSON.parse(saved) : {name:'alemán', locale:'de-DE', version:0}; }\n" +
+  "function assertLanguageVersion_(version) { if (version !== targetLanguage_().version) throw new Error('El idioma cambió'); }\n" +
+  between(code, 'function saveLanguageSettings(payload) {', '\n\nfunction getSheet_') +
+  '\nreturn saveLanguageSettings;'
+)({getScriptProperties:() => ({getProperty:key => properties.get(key) ?? null, setProperty:(key, value) => properties.set(key, value), deleteProperty:key => properties.delete(key)})},
+  () => ({getSheetByName:() => ({getRange:() => ({getValue:() => targetHeader, setValue:value => { if (failHeader) { failHeader = false; throw new Error('Header failed'); } targetHeader = value; }})})}));
+assert.deepEqual(saveLanguage({name:'Francés', locale:'fr-FR', expectedVersion:0}), {name:'francés', locale:'fr-FR', version:1});
+assert.equal(targetHeader, 'Frase (FR)');
+assert.deepEqual(JSON.parse(properties.get('APP_TARGET_LANGUAGE')), {name:'francés', locale:'fr-FR', version:1});
+assert.throws(() => saveLanguage({name:'Italiano', locale:'it-IT', expectedVersion:0}), /idioma cambió/);
+failHeader = true;
+assert.throws(() => saveLanguage({name:'Italiano', locale:'it-IT', expectedVersion:1}), /Header failed/);
+assert.equal(targetHeader, 'Frase (FR)');
+assert.deepEqual(JSON.parse(properties.get('APP_TARGET_LANGUAGE')), {name:'francés', locale:'fr-FR', version:1});
 
 const replaceMaterialBody = Function(
   between(html, '  function replaceMaterialBody_(document, body) {', '\n\n  function generatePrintMaterial_') +

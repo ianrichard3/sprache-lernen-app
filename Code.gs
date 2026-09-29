@@ -1,10 +1,10 @@
 /**
- * Deutsch – ABMC de frases
+ * ABMC de frases para estudiar idiomas
  * Backend de Apps Script. La app funciona como web app y también como diálogo
  * modal sobre el Sheet.
  *
  * Hoja "Frases":
- * A: ID | B: Frase (DE) | C: Traducción | D: Notas | E: Estado | F: Etiquetas
+ * A: ID | B: Frase objetivo | C: Traducción | D: Notas | E: Estado | F: Etiquetas
  * G: Creado | H: Actualizado | I: Incluida en material
  *
  * Hoja "Historial": ID | Resultado | Estudiado
@@ -14,7 +14,8 @@
  */
 
 const SHEET_NAME = 'Frases';
-const SPREADSHEET_ID = '16iaAw1OpXNF2x2MHjEFVOLzGezdvI73XFDiqE56oQFU';
+const SPREADSHEET_ID_PROPERTY = 'APP_SPREADSHEET_ID';
+const LANGUAGE_PROPERTY = 'APP_TARGET_LANGUAGE';
 const HISTORY_SHEET_NAME = 'Historial';
 const COLLECTION_SHEET_NAME = 'Colecciones';
 const COLLECTION_HEADERS = ['ID', 'Nombre', 'Creado', 'Actualizado'];
@@ -35,7 +36,7 @@ const HISTORY_WIDTH = HISTORY_HEADERS.length;
 const HISTORY_LIMIT = 20;
 
 const HEADERS = [
-  'ID', 'Frase (DE)', 'Traducción', 'Notas', 'Estado', 'Etiquetas', 'Creado', 'Actualizado', 'Incluida en material'
+  'ID', 'Frase objetivo', 'Traducción', 'Notas', 'Estado', 'Etiquetas', 'Creado', 'Actualizado', 'Incluida en material'
 ];
 
 const COL = { ID: 1, DE: 2, ES: 3, NOTES: 4, STATUS: 5, TAGS: 6, CREATED: 7, UPDATED: 8, PRINTED_AT: 9 };
@@ -56,11 +57,9 @@ const MIGRATE_RECORDED_TO = 'En práctica';
 
 const GEMINI_MODEL = 'gemini-3.5-flash-lite';
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
-const TRANSLATION_INSTRUCTION = 'Traducí del español al alemán estándar natural para estudiar. Devolvé únicamente la traducción alemana, sin comillas, explicaciones ni alternativas. Usá registro informal con "du" cuando el texto no indique contexto.';
-const SPANISH_TRANSLATION_INSTRUCTION = 'Traducí del alemán al español natural para estudiar. Devolvé únicamente la traducción española, sin comillas, explicaciones ni alternativas.';
 const ETYMOLOGY_INSTRUCTION = [
   'Eres un analista lingüístico de precisión.',
-  'Cada vez que te envíe una palabra o frase corta en cualquier idioma (especialmente alemán), analízala utilizando exactamente la estructura siguiente.',
+  'Cada vez que te envíe una palabra o frase corta, analízala utilizando exactamente la estructura siguiente.',
   'Sé conciso, directo y fácil de leer de un vistazo.',
   'Omite introducciones, despedidas y relleno conversacional.',
   '',
@@ -82,7 +81,7 @@ const ETYMOLOGY_INSTRUCTION = [
 
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu('Deutsch')
+    .createMenu('Frases')
     .addItem('Abrir frases', 'showApp')
     .addSeparator()
     .addItem('Preparar hoja', 'setupSheet')
@@ -91,15 +90,16 @@ function onOpen() {
 }
 
 function showApp() {
+  registerSpreadsheet_();
   const html = HtmlService.createHtmlOutputFromFile('App')
     .setWidth(1000)
     .setHeight(640);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Frases en alemán');
+  SpreadsheetApp.getUi().showModalDialog(html, 'Frases para estudiar');
 }
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('App')
-    .setTitle('Frases en alemán')
+    .setTitle('Frases para estudiar')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .addMetaTag('mobile-web-app-capable', 'yes')
     .addMetaTag('apple-mobile-web-app-capable', 'yes');
@@ -111,7 +111,71 @@ function doGet() {
 
 /** Ruta caliente: devuelve la hoja sin tocar formato. */
 function getSpreadsheet_() {
-  return SpreadsheetApp.openById(SPREADSHEET_ID);
+  const id = PropertiesService.getScriptProperties().getProperty(SPREADSHEET_ID_PROPERTY) ||
+    (typeof PRODUCTION_SPREADSHEET_ID === 'string' ? PRODUCTION_SPREADSHEET_ID : '');
+  if (!id) throw new Error('Abrí la app una vez desde el menú Frases de su Google Sheet.');
+  return SpreadsheetApp.openById(id);
+}
+
+function registerSpreadsheet_() {
+  const active = SpreadsheetApp.getActiveSpreadsheet();
+  if (!active) throw new Error('Abrí esta función desde el menú de un Google Sheet.');
+  PropertiesService.getScriptProperties().setProperty(SPREADSHEET_ID_PROPERTY, active.getId());
+}
+
+function targetLanguage_() {
+  const saved = PropertiesService.getScriptProperties().getProperty(LANGUAGE_PROPERTY);
+  const language = saved ? JSON.parse(saved) : { name: 'alemán', locale: 'de-DE' };
+  language.version = Number(language.version) || 0;
+  return language;
+}
+
+function assertLanguageVersion_(expectedVersion) {
+  if (!Number.isInteger(expectedVersion) || expectedVersion !== targetLanguage_().version) {
+    throw new Error('El idioma cambió. Actualizá los datos antes de continuar.');
+  }
+}
+
+function languageHeading_() {
+  const language = targetLanguage_();
+  return language.locale === 'de-DE' ? 'Deutsch' : language.name.charAt(0).toUpperCase() + language.name.slice(1);
+}
+
+function saveLanguageSettings(payload) {
+  if (!payload || typeof payload.name !== 'string' || typeof payload.locale !== 'string') {
+    throw new Error('Elegí un idioma y un código de voz válido.');
+  }
+  const name = normalize_(payload.name);
+  const locale = normalize_(payload.locale);
+  if (!name || name.length > 40 || /[<>:"/\\|?*\r\n\x00-\x1f]/.test(name) ||
+      !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(locale)) {
+    throw new Error('Elegí un idioma y un código de voz válido, por ejemplo fr-FR.');
+  }
+  return withLock_(function () {
+    assertLanguageVersion_(payload.expectedVersion);
+    const properties = PropertiesService.getScriptProperties();
+    const previous = properties.getProperty(LANGUAGE_PROPERTY);
+    const current = targetLanguage_();
+    const language = { name: name.toLowerCase(), locale: locale,
+      version: current.version + (current.name === name.toLowerCase() && current.locale === locale ? 0 : 1) };
+    const sheet = getSpreadsheet_().getSheetByName(SHEET_NAME);
+    const heading = sheet ? sheet.getRange(1, COL.DE) : null;
+    const previousHeading = heading ? heading.getValue() : null;
+    properties.setProperty(LANGUAGE_PROPERTY, JSON.stringify(language));
+    try {
+      if (heading) heading.setValue('Frase (' + locale.split('-')[0].toUpperCase() + ')');
+    } catch (error) {
+      try {
+        if (previous === null) properties.deleteProperty(LANGUAGE_PROPERTY);
+        else properties.setProperty(LANGUAGE_PROPERTY, previous);
+        if (heading) heading.setValue(previousHeading);
+      } catch (rollbackError) {
+        throw new Error('No se pudo guardar el idioma y la recuperación automática falló. Actualizá los datos antes de continuar.');
+      }
+      throw error;
+    }
+    return language;
+  });
 }
 
 function getSheet_(ss) {
@@ -149,16 +213,17 @@ function getCollectionMembersSheet_(ss) {
 
 /** Ruta fría: encabezados, anchos, validación y colores. Sólo desde el menú. */
 function setupSheet() {
+  registerSpreadsheet_();
   const ss = getSpreadsheet_();
   buildSheet_(ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME));
   buildCollectionsSheet_(ss.getSheetByName(COLLECTION_SHEET_NAME) || ss.insertSheet(COLLECTION_SHEET_NAME));
   buildCollectionMembersSheet_(ss.getSheetByName(COLLECTION_MEMBER_SHEET_NAME) || ss.insertSheet(COLLECTION_MEMBER_SHEET_NAME));
-  ss.toast('Hojas de frases y colecciones listas.', 'Deutsch', 5);
+  ss.toast('Hojas de frases y colecciones listas.', 'Frases', 5);
 }
 
 function buildSheet_(sheet) {
   sheet.getRange(1, 1, 1, WIDTH)
-    .setValues([HEADERS])
+    .setValues([[HEADERS[0], 'Frase (' + targetLanguage_().locale.split('-')[0].toUpperCase() + ')'].concat(HEADERS.slice(2))])
     .setFontWeight('bold')
     .setBackground('#16202b')
     .setFontColor('#ffffff')
@@ -508,6 +573,9 @@ function publicCollection_(item, count, unassigned) {
 
 /** La única carga de datos para la UI. */
 function loadAppData() {
+  const properties = PropertiesService.getScriptProperties();
+  if (!properties.getProperty(SPREADSHEET_ID_PROPERTY) && typeof PRODUCTION_SPREADSHEET_ID !== 'string') return { setup: 'sheet' };
+  if (!properties.getProperty(LANGUAGE_PROPERTY) && typeof PRODUCTION_SPREADSHEET_ID !== 'string') return { setup: 'language', language: targetLanguage_() };
   const ss = getSpreadsheet_();
   const data = collectionData_(ss);
   const counts = {};
@@ -538,6 +606,7 @@ function loadAppData() {
   });
 
   return {
+    language: targetLanguage_(),
     items: data.phrases.items.sort(function (a, b) { return b.id.localeCompare(a.id); }),
     history: historyEntries_(getHistorySheet_(ss)).map(historyToObject_),
     collections: [{ id: UNASSIGNED_COLLECTION_ID, name: 'Sin colección', count: unassignedCount, unassigned: true }]
@@ -967,15 +1036,16 @@ function printMarkdownCell_(value) {
 }
 
 function printMarkdown_(plan, now) {
+  const heading = languageHeading_();
   const lines = [
-    '# Deutsch – Frases para estudiar',
+    '# ' + heading + ' – Frases para estudiar',
     '',
     'Generado el ' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') + ' · ' + plan.count + ' frases distintas' +
       (plan.rowCount !== plan.count ? ' · ' + plan.rowCount + ' filas' : ''),
     ''
   ];
   plan.groups.forEach(function (group) {
-    lines.push('## ' + printMarkdownCell_(group.name), '', '| Deutsch | Español |', '| --- | --- |');
+    lines.push('## ' + printMarkdownCell_(group.name), '', '| ' + printMarkdownCell_(heading) + ' | Español |', '| --- | --- |');
     group.items.forEach(function (item) {
       lines.push('| ' + printMarkdownCell_(item.de) + ' | ' + printMarkdownCell_(item.es) + ' |');
     });
@@ -994,15 +1064,17 @@ function printHtmlCell_(value) {
 }
 
 function printHtmlBody_(plan, now) {
+  const heading = languageHeading_();
+  const locale = targetLanguage_().locale;
   const lines = [
-    '<h1>Deutsch – Frases para estudiar</h1>',
+    '<h1>' + printHtmlCell_(heading) + ' – Frases para estudiar</h1>',
     '<p class="material-meta">Generado el ' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') + ' · ' + plan.count + ' frases distintas' +
       (plan.rowCount !== plan.count ? ' · ' + plan.rowCount + ' filas' : '') + '</p>'
   ];
   plan.groups.forEach(function (group) {
-    lines.push('<section><h2>' + printHtmlCell_(group.name) + '</h2><table><thead><tr><th>Deutsch</th><th>Español</th></tr></thead><tbody>');
+    lines.push('<section><h2>' + printHtmlCell_(group.name) + '</h2><table><thead><tr><th>' + printHtmlCell_(heading) + '</th><th>Español</th></tr></thead><tbody>');
     group.items.forEach(function (item) {
-      lines.push('<tr><td>' + printHtmlCell_(item.de) + '</td><td>' + printHtmlCell_(item.es) + '</td></tr>');
+      lines.push('<tr><td lang="' + printHtmlCell_(locale) + '">' + printHtmlCell_(item.de) + '</td><td>' + printHtmlCell_(item.es) + '</td></tr>');
     });
     lines.push('</tbody></table></section>');
   });
@@ -1012,17 +1084,17 @@ function printHtmlBody_(plan, now) {
 function printHtmlDocument_(body, fontSize, lineHeight) {
   const size = [18, 20, 22, 24].indexOf(Number(fontSize)) !== -1 ? Number(fontSize) : 20;
   const leading = [1.4, 1.6, 1.8, 2].indexOf(Number(lineHeight)) !== -1 ? Number(lineHeight) : 1.6;
-  return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Deutsch – Material</title><style>' +
+  return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + printHtmlCell_(languageHeading_()) + ' – Material</title><style>' +
     '*,*::before,*::after{box-sizing:border-box}body{max-width:900px;margin:0 auto;padding:28px 24px;color:#111;font-family:Georgia,"Times New Roman",serif;font-size:' + size + 'px;line-height:' + leading + '}h1{margin:0 0 .25em;font-size:1.45em;line-height:1.15}h2{margin:1.5em 0 .45em;font-size:1.1em;line-height:1.2;break-after:avoid;page-break-after:avoid}.material-meta{margin:0 0 1.5em;color:#555;font: .65em/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}table{width:100%;border-collapse:collapse;table-layout:fixed;margin:0 0 1.4em}th,td{border:1px solid #777;padding:.65em .6em;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#eee;font:.72em/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-transform:uppercase;letter-spacing:.04em}tr{break-inside:avoid;page-break-inside:avoid}section{break-inside:auto;page-break-inside:auto}@media print{body{max-width:none;padding:12mm 10mm}h2{break-before:page;page-break-before:always}section:first-of-type h2{break-before:auto;page-break-before:auto}}' +
     '</style></head><body>' + body + '</body></html>';
 }
 
 function printFileName_(now) {
-  return 'Deutsch - Material - ' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd HH-mm') + '.md';
+  return languageHeading_() + ' - Material - ' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd HH-mm') + '.md';
 }
 
 function printHtmlFileName_(now) {
-  return 'Deutsch - Material - ' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd HH-mm') + '.html';
+  return languageHeading_() + ' - Material - ' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd HH-mm') + '.html';
 }
 
 function markPhrasesPrinted_(table, phraseIds, now) {
@@ -1038,6 +1110,7 @@ function markPhrasesPrinted_(table, phraseIds, now) {
 
 function generatePhraseMarkdown(payload) {
   return withLock_(function () {
+    assertLanguageVersion_(payload && payload.expectedLanguageVersion);
     const ss = getSpreadsheet_();
     const data = collectionData_(ss);
     const plan = printPlan_(data, payload);
@@ -1055,20 +1128,24 @@ function generatePhraseMarkdown(payload) {
 }
 
 function previewPhraseMaterial(payload) {
-  const data = collectionData_(getSpreadsheet_());
-  const plan = printPlan_(data, payload);
-  const now = new Date();
-  return {
-    body: printHtmlBody_(plan, now),
-    includedCount: plan.count,
-    rowCount: plan.rowCount,
-    name: printHtmlFileName_(now),
-    signature: plan.signature
-  };
+  return withLock_(function () {
+    assertLanguageVersion_(payload && payload.expectedLanguageVersion);
+    const data = collectionData_(getSpreadsheet_());
+    const plan = printPlan_(data, payload);
+    const now = new Date();
+    return {
+      body: printHtmlBody_(plan, now),
+      includedCount: plan.count,
+      rowCount: plan.rowCount,
+      name: printHtmlFileName_(now),
+      signature: plan.signature
+    };
+  });
 }
 
 function generatePhraseHtml(payload) {
   return withLock_(function () {
+    assertLanguageVersion_(payload && payload.expectedLanguageVersion);
     const ss = getSpreadsheet_();
     const data = collectionData_(ss);
     const plan = printPlan_(data, payload);
@@ -1201,9 +1278,10 @@ function savePhrase(payload) {
   const id = normalize_(payload && payload.id);
   const de = normalize_(payload && payload.de);
   const es = normalize_(payload && payload.es);
-  if (!de) throw new Error('La frase en alemán no puede quedar vacía.');
+  if (!de) throw new Error('La frase en ' + targetLanguage_().name + ' no puede quedar vacía.');
 
   return withLock_(function () {
+    assertLanguageVersion_(payload && payload.expectedLanguageVersion);
     const ss = getSpreadsheet_();
     const sheet = getSheet_(ss);
     const table = readTable_(sheet);
@@ -1269,8 +1347,9 @@ function saveGeneratedPhrases(payload) {
   const items = payload && payload.items;
   if (!Array.isArray(items) || !items.length || items.length > 10 || items.some(function (item) {
     return !item || typeof item.de !== 'string' || typeof item.es !== 'string' || !item.de.trim() || !item.es.trim();
-  })) throw new Error('Seleccioná entre 1 y 10 frases con alemán y español completos.');
+  })) throw new Error('Seleccioná entre 1 y 10 frases con ' + targetLanguage_().name + ' y español completos.');
   return withLock_(function () {
+    assertLanguageVersion_(payload && payload.expectedLanguageVersion);
     const ss = getSpreadsheet_();
     const phrases = readTable_(getSheet_(ss));
     const collections = collectionRows_(readTable_(getCollectionsSheet_(ss), COLLECTION_WIDTH));
@@ -1398,10 +1477,11 @@ function importPhrases(payload) {
 
   if (!isFinite(deColumn) || !isFinite(esColumn) || deColumn < 0 || esColumn < 0 ||
       deColumn >= columnCount || esColumn >= columnCount || deColumn === esColumn) {
-    throw new Error('Elegí columnas distintas para alemán y español.');
+    throw new Error('Elegí columnas distintas para ' + targetLanguage_().name + ' y español.');
   }
 
   return withLock_(function () {
+    assertLanguageVersion_(payload && payload.expectedLanguageVersion);
     const sheet = getSheet_();
     const table = readTable_(sheet);
     const known = {};
