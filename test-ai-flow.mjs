@@ -64,6 +64,32 @@ console.log('Phrase generation validation: OK');
 const html = readFileSync('App.html', 'utf8');
 assert.match(html, /Nivel de la próxima tanda/);
 assert.match(html, /Tanda generada:/);
+assert.match(html, /button:disabled \{ cursor:not-allowed;/);
+function renderGeneratorFor(state) {
+  const screen = {innerHTML:''};
+  const document = {activeElement:null, getElementById() { return null; }};
+  const render = Function('state', 'document', 'el', 'esc', 'targetName_', 'collectionById_',
+    between(html, '  function renderGenerator() {', '\n\n  function generatePhrases_') + '\nreturn renderGenerator;')(
+      state, document, {screen}, value => String(value == null ? '' : value), () => 'alemán',
+      id => state.collections.find(collection => collection.id === id) || null
+    );
+  render();
+  return screen.innerHTML;
+}
+const renderedGeneratorState = {language:{locale:'de-DE'}, collections:[{id:'C1', name:'Colección'}],
+  generator:{busy:false, saving:false, context:'Trenes', level:'intermediate', generatedLevel:'intermediate',
+    items:[{de:'Hallo', es:'Hola', selected:false, saved:false}], collectionIds:[]}};
+assert.match(renderGeneratorFor(renderedGeneratorState), /Marcá al menos una frase/);
+assert.match(renderGeneratorFor(renderedGeneratorState), /Agregar seleccionadas \(0\)<\/button>/);
+renderedGeneratorState.generator.items[0].selected = true;
+assert.match(renderGeneratorFor(renderedGeneratorState), /Las frases nuevas quedarán en “Sin colección”/);
+assert.match(renderGeneratorFor(renderedGeneratorState), /data-act="save-generated">Agregar seleccionadas \(1\)<\/button>/);
+renderedGeneratorState.generator.collectionIds = ['C1'];
+assert.doesNotMatch(renderGeneratorFor(renderedGeneratorState), /Las frases nuevas quedarán en “Sin colección”/);
+assert.doesNotMatch(renderGeneratorFor(renderedGeneratorState), /data-act="save-generated" disabled>/);
+renderedGeneratorState.generator.busy = true;
+assert.match(renderGeneratorFor(renderedGeneratorState), /Generando frases/);
+assert.match(renderGeneratorFor(renderedGeneratorState), /data-act="save-generated" disabled>Agregar seleccionadas \(1\)<\/button>/);
 function generatorClient() {
   const state = {loadingData:false, view:'generate', language:{version:0}, items:[], generator:{context:'Trenes', level:'intermediate', generatedLevel:null, items:[], collectionIds:['C1', 'C2'], busy:false, saving:false, debug:''}};
   let success, failure, sent, confirmation = true, renders = 0;
@@ -136,6 +162,13 @@ function selectedClient() {
   client.state.generator.items = [{de:'Hallo', es:'Hola', selected:true, saved:false}];
   return client;
 }
+const saveWithoutCollection = selectedClient();
+saveWithoutCollection.state.generator.collectionIds = [];
+saveWithoutCollection.saveGeneratedPhrases_();
+assert.deepEqual(saveWithoutCollection.sent().collectionIds, []);
+assert.equal(saveWithoutCollection.state.generator.busy, true);
+saveWithoutCollection.success({results:[{item:{id:'F3', de:'Hallo', es:'Hola'}, collectionIds:[]}]});
+assert.equal(saveWithoutCollection.state.generator.items[0].saved, true);
 for (const view of ['manage', 'print', 'collections']) {
   const background = selectedClient();
   background.saveGeneratedPhrases_();

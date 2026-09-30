@@ -12,7 +12,7 @@
   button,input,textarea,select { font:inherit; }
   button { cursor:pointer; border:1px solid transparent; border-radius:6px; padding:7px 11px; }
   button:focus-visible,input:focus,textarea:focus,select:focus { outline:2px solid var(--focus); outline-offset:1px; }
-  button:disabled { cursor:wait; opacity:.55; }
+  button:disabled { cursor:not-allowed; opacity:.55; }
   input[type="text"],input[type="search"],textarea,select { width:100%; padding:8px 9px; border:1px solid var(--rule); border-radius:6px; background:var(--paper); color:var(--ink); }
   textarea { min-height:72px; resize:vertical; }
   #app { min-height:100vh; }
@@ -1219,6 +1219,8 @@
     var selected = draft.items.filter(function (item) { return item.selected && !item.saved; }).length;
     var collections = state.collections.filter(function (collection) { return !collection.unassigned; });
     draft.collectionIds = draft.collectionIds.filter(function (id) { return !!collectionById_(id); });
+    var addHint = draft.busy ? '' : !selected ? 'Marcá al menos una frase.' :
+      !draft.collectionIds.length ? 'Las frases nuevas quedarán en “Sin colección”.' : '';
     var destinations = collections.map(function (collection) {
       return '<label><input type="checkbox" id="generator-collection-' + esc(collection.id) + '" data-generator-collection value="' + esc(collection.id) + '"' +
         (draft.collectionIds.indexOf(collection.id) !== -1 ? ' checked' : '') + disabled + '> ' + esc(collection.name) + '</label>';
@@ -1236,12 +1238,13 @@
       '<div class="field"><label for="generator-context">Situación o temática</label><textarea id="generator-context" placeholder="Por ejemplo: pedir ayuda con un bug"' + disabled + '>' + esc(draft.context) + '</textarea></div>' +
       '<div class="field"><label for="generator-level">Nivel de la próxima tanda</label><select id="generator-level"' + disabled + '><option value="intermediate"' + (draft.level === 'intermediate' ? ' selected' : '') + '>Intermedio (B1–B2)</option><option value="advanced"' + (draft.level === 'advanced' ? ' selected' : '') + '>Avanzado (C1–C2)</option></select></div>' +
       '<button class="primary" data-act="generate-phrases"' + disabled + '>' + (draft.items.length ? 'Generar otra tanda' : 'Generar frases') + '</button>' +
-      '<p role="status" aria-live="polite">' + (draft.busy ? 'Procesando…' : '') + '</p>' +
+      '<p role="status" aria-live="polite">' + (draft.busy ? (draft.saving ? 'Guardando frases…' : 'Generando frases…') : '') + '</p>' +
       (draft.debug ? '<details open class="panel" style="margin-top:12px"><summary>Respuesta de Gemini (diagnóstico)</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto">' + esc(draft.debug) + '</pre></details>' : '') +
-      (draft.items.length ? '<div class="panel"><h2 class="section-title">Colecciones de destino</h2><p class="hint">Tanda generada: ' + (draft.generatedLevel === 'advanced' ? 'Avanzado (C1–C2)' : 'Intermedio (B1–B2)') + '. Las frases seleccionadas se agregan a todas las colecciones que marques.</p>' +
-        (destinations ? '<div class="collection-picker">' + destinations + '</div>' : '<p>Creá una colección en Colecciones y volvé. Tu borrador se conserva mientras no recargues la app.</p>') +
+      (draft.items.length ? '<div class="panel"><h2 class="section-title">Colecciones de destino</h2><p class="hint">Tanda generada: ' + (draft.generatedLevel === 'advanced' ? 'Avanzado (C1–C2)' : 'Intermedio (B1–B2)') + '. Elegir colecciones es opcional; las frases nuevas sin destino quedan en “Sin colección”.</p>' +
+        (destinations ? '<div class="collection-picker">' + destinations + '</div>' : '<p class="hint">No hay colecciones disponibles para elegir.</p>') +
         '<div class="form-actions"><button class="ghost" data-act="generator-select-all"' + disabled + '>Seleccionar todas</button><button class="ghost" data-act="generator-select-none"' + disabled + '>Deseleccionar todas</button>' +
-        '<button class="primary" data-act="save-generated"' + (draft.busy || !selected || !draft.collectionIds.length ? ' disabled' : '') + '>Agregar seleccionadas (' + selected + ')</button></div></div>' + rows : '') + '</section>';
+        '<button class="primary" data-act="save-generated"' + (draft.busy || !selected ? ' disabled' : '') + '>Agregar seleccionadas (' + selected + ')</button></div>' +
+        (addHint ? '<p class="hint" role="status" aria-live="polite">' + addHint + '</p>' : '') + '</div>' + rows : '') + '</section>';
     var focused = focusedId && document.getElementById(focusedId);
     if (focused && !focused.disabled) focused.focus();
   }
@@ -1276,7 +1279,7 @@
     if (draft.busy) return;
     if (state.loadingData) return say('Esperá a que termine la actualización antes de guardar.', 'err');
     var selected = draft.items.filter(function (item) { return item.selected && !item.saved; });
-    if (!selected.length || !draft.collectionIds.length) return say('Elegí frases y al menos una colección.', 'err');
+    if (!selected.length) return say('Elegí al menos una frase.', 'err');
     if (selected.some(function (item) { return !item.de.trim() || !item.es.trim(); })) return say('Completá ' + targetName_() + ' y español de las frases seleccionadas.', 'err');
     draft.busy = true;
     draft.saving = true;
@@ -1298,7 +1301,7 @@
       if (state.collectionId) state.collection = localCollection_(state.collectionId);
       // Conservá formularios y material editado; el backend valida la firma del material al descargar.
       if (state.view === 'generate') renderGenerator();
-      say('Frases agregadas a las colecciones elegidas.');
+      say(draft.collectionIds.length ? 'Frases agregadas a las colecciones elegidas.' : 'Frases agregadas sin asignar colecciones nuevas.');
     }).withFailureHandler(function (err) {
       draft.busy = false;
       draft.saving = false;

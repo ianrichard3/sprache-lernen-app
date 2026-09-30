@@ -275,10 +275,17 @@ assert.equal(generated.memberRows.length, 3);
 const multiple = generatorBackend();
 multiple.run({items:[{de:'Neu', es:'Nueva'}], collectionIds:['C1', 'C2'], expectedLanguageVersion:0});
 assert.deepEqual(multiple.memberRows.slice(1).map(row => [row[0], row[2]]), [['C1', 2], ['C2', 1]]);
+const unassigned = generatorBackend();
+const withoutCollection = unassigned.run({items:[{de:'Neu', es:'Nueva'}], collectionIds:[], expectedLanguageVersion:0});
+assert.equal(unassigned.phraseRows.length, 2);
+assert.equal(unassigned.memberRows.length, 1);
+assert.deepEqual(withoutCollection.results[0].collectionIds, []);
+const reusedWithoutCollection = unassigned.run({items:[{de:'Hallo!', es:'Ignorada'}], collectionIds:[], expectedLanguageVersion:0});
+assert.equal(reusedWithoutCollection.results[0].reused, true);
+assert.deepEqual(reusedWithoutCollection.results[0].collectionIds, ['C1']);
 for (const invalid of [
   {items:[], collectionIds:['C1'], expectedLanguageVersion:0},
   {items:[{de:'Neu', es:''}], collectionIds:['C1'], expectedLanguageVersion:0},
-  {items:[{de:'Neu', es:'Nueva'}], collectionIds:[], expectedLanguageVersion:0},
   {items:[{de:'Neu', es:'Nueva'}], collectionIds:['deleted'], expectedLanguageVersion:0}
 ]) {
   const backend = generatorBackend();

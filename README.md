@@ -58,10 +58,11 @@ compatible, la app lo indica y deja el resto de funciones usable.
 En **Generar**, escribí una situación o temática y elegí **Intermedio (B1–B2)**
 o **Avanzado (C1–C2)** para obtener 10 frases en el idioma objetivo con
 traducción natural al español, usando la misma clave Gemini.
-Revisá y editá los resultados, marcá las frases y elegí una o varias colecciones
-existentes. **Agregar seleccionadas** guarda sólo las marcadas en todos los
-destinos elegidos. Si una frase ya existe, conserva su traducción y progreso y
-se agrega a las colecciones que falten.
+Revisá y editá los resultados y marcá las frases que quieras guardar. Elegir
+colecciones es opcional: sin destinos, las frases nuevas quedan en **Sin
+colección**. Si una frase ya existe, conserva su traducción, progreso y
+colecciones actuales; con destinos marcados, también se agrega a las colecciones
+que falten.
 
 Los borradores se conservan al navegar entre secciones, pero se pierden al
 recargar o cerrar la app. Generar otra tanda pide confirmar el descarte de los

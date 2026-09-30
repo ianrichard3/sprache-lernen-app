@@ -1354,7 +1354,6 @@ function saveGeneratedPhrases(payload) {
     const phrases = readTable_(getSheet_(ss));
     const collections = collectionRows_(readTable_(getCollectionsSheet_(ss), COLLECTION_WIDTH));
     const collectionIds = requestedCollectionIds_(payload.collectionIds, collections);
-    if (!collectionIds.length) throw new Error('Elegí al menos una colección.');
     const members = readTable_(getCollectionMembersSheet_(ss), COLLECTION_MEMBER_WIDTH);
     const known = new Map();
     phrases.values.forEach(function (row) {
