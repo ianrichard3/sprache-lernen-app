@@ -23,7 +23,7 @@ assert.equal(extractGeminiText({steps: [{type: 'model_output', content: []}]}), 
 assert.equal(extractGeminiText({}), '');
 
 const suggestSpanishTranslation = Function(
-  "function targetLanguage_() { return {name:'alemán', locale:'de-DE'}; }\n" +
+  "function targetLanguage_() { return {name:'alemán', locale:'de-DE', translation:{name:'español', locale:'es-ES'}}; }\n" +
   "function assertLanguageVersion_() {}\n" +
   "function normalize_(value) { return String(value == null ? '' : value).trim(); }\n" +
   "function geminiText_(instruction, input) { return instruction + '\\n' + input; }\n" +
@@ -32,13 +32,13 @@ const suggestSpanishTranslation = Function(
 )();
 assert.equal(
   suggestSpanishTranslation(' Guten Morgen '),
-  'Traducí del alemán al español natural para estudiar. Devolvé únicamente la traducción española, sin comillas, explicaciones ni alternativas.\nTexto en alemán:\nGuten Morgen'
+  'Traducí del alemán a español natural para estudiar. Devolvé únicamente la traducción, sin comillas, explicaciones ni alternativas.\nTexto en alemán:\nGuten Morgen'
 );
 assert.throws(() => suggestSpanishTranslation('  '), /frase en alemán/);
 
 console.log('Gemini response parsing: OK');
 
-const generation = Function('geminiText_', "function targetLanguage_() { return {name:'alemán', locale:'de-DE'}; }\nfunction assertLanguageVersion_() {}\n" + code.slice(code.indexOf('function generatePhrases(context, level, expectedLanguageVersion)')) + '\nreturn generatePhrases;');
+const generation = Function('geminiText_', "function targetLanguage_() { return {name:'alemán', locale:'de-DE', translation:{name:'español', locale:'es-ES'}}; }\nfunction assertLanguageVersion_() {}\n" + code.slice(code.indexOf('function generatePhrases(context, level, expectedLanguageVersion)')) + '\nreturn generatePhrases;');
 const phrases = Array.from({length:10}, (_, i) => ({de:` Satz ${i} `, es:` Frase ${i} `}));
 const aiPhrases = phrases.map(({de, es}) => ({target:de, es}));
 assert.deepEqual(generation(() => JSON.stringify(aiPhrases))('Trenes'), phrases.map(({de, es}) => ({de:de.trim(), es:es.trim()})));
@@ -50,7 +50,7 @@ assert.deepEqual(generation(() => JSON.stringify(aiPhrases.map(({target, es}) =>
 assert.throws(() => generation(() => { throw new Error('Proveedor caído'); })('Trenes'), /Proveedor caído/);
 assert.throws(() => generation(() => { assert.fail('No debe llamar a Gemini'); })('  '), /temática/);
 let advancedInstruction = '';
-const frenchGeneration = Function('geminiText_', "function targetLanguage_() { return {name:'francés', locale:'fr-FR'}; }\nfunction assertLanguageVersion_() {}\n" + code.slice(code.indexOf('function generatePhrases(context, level, expectedLanguageVersion)')) + '\nreturn generatePhrases;')((instruction) => {
+const frenchGeneration = Function('geminiText_', "function targetLanguage_() { return {name:'francés', locale:'fr-FR', translation:{name:'español', locale:'es-ES'}}; }\nfunction assertLanguageVersion_() {}\n" + code.slice(code.indexOf('function generatePhrases(context, level, expectedLanguageVersion)')) + '\nreturn generatePhrases;')((instruction) => {
   advancedInstruction = instruction;
   return JSON.stringify(aiPhrases);
 });
@@ -68,15 +68,15 @@ assert.match(html, /button:disabled \{ cursor:not-allowed;/);
 function renderGeneratorFor(state) {
   const screen = {innerHTML:''};
   const document = {activeElement:null, getElementById() { return null; }};
-  const render = Function('state', 'document', 'el', 'esc', 'targetName_', 'collectionById_',
+  const render = Function('state', 'document', 'el', 'esc', 'targetName_', 'collectionById_', 'translationName_', 'pronunciationFieldsHtml_',
     between(html, '  function renderGenerator() {', '\n\n  function generatePhrases_') + '\nreturn renderGenerator;')(
       state, document, {screen}, value => String(value == null ? '' : value), () => 'alemán',
-      id => state.collections.find(collection => collection.id === id) || null
+      id => state.collections.find(collection => collection.id === id) || null, () => 'español', () => ''
     );
   render();
   return screen.innerHTML;
 }
-const renderedGeneratorState = {language:{locale:'de-DE'}, collections:[{id:'C1', name:'Colección'}],
+const renderedGeneratorState = {language:{locale:'de-DE', translation:{name:'español', locale:'es-ES'}}, collections:[{id:'C1', name:'Colección'}],
   generator:{busy:false, saving:false, context:'Trenes', level:'intermediate', generatedLevel:'intermediate',
     items:[{de:'Hallo', es:'Hola', selected:false, saved:false}], collectionIds:[]}};
 assert.match(renderGeneratorFor(renderedGeneratorState), /Marcá al menos una frase/);
@@ -110,6 +110,7 @@ function generatorClient() {
     function refreshOpenCollection_() {}
     function clearPrintResult_() { state.printPreview = null; }
     function targetName_() { return 'alemán'; }
+    function translationName_() { return 'español'; }
     function applyAppData_(data) { state.items = data.items; }
     ${between(html, '  function generatePhrases_()', '  function renderEtymology()')}
     ${between(html, '  function reload(done, preservePrint)', '\n\n  el.app.addEventListener')}
@@ -128,7 +129,7 @@ client.state.generator.items[1].selected = true;
 client.state.generator.items[1].de = 'Editada DE';
 client.state.generator.items[1].es = 'Editada ES';
 client.saveGeneratedPhrases_();
-assert.deepEqual(client.sent(), {items:[{de:'Editada DE', es:'Editada ES'}], collectionIds:['C1', 'C2'], expectedLanguageVersion:0});
+assert.deepEqual(client.sent(), {items:[{de:'Editada DE', es:'Editada ES', pronunciation:'', kana:''}], collectionIds:['C1', 'C2'], expectedLanguageVersion:0});
 client.failure();
 assert.equal(client.state.generator.busy, false);
 assert.equal(client.state.generator.items[1].de, 'Editada DE');
@@ -209,3 +210,73 @@ assert.equal(loadingFirst.state.loadingData, false);
 loadingFirst.saveGeneratedPhrases_();
 assert.equal(loadingFirst.state.generator.saving, true, 'Los errores no deben bloquear reintentos');
 console.log('Background save preserves edits; refresh and save cannot overlap: OK');
+
+// Late translations must preserve manual changes in either direction.
+function translationClient(toOriginal = false) {
+  const state = {language:{version:1}, languageBusy:0};
+  const fields = {'f-de':{value:'Original'}, 'f-es':{value:'Translation'},
+    'ai-translate':{disabled:false}, 'ai-translate-to-es':{disabled:false}};
+  let success, failure, attached = true, reviewed = 0, sent;
+  const run = {
+    withSuccessHandler(fn) { success = fn; return this; },
+    withFailureHandler(fn) { failure = fn; return this; },
+    suggestGermanTranslation(...args) { sent = args; },
+    suggestSpanishTranslation(...args) { sent = args; }
+  };
+  const methods = Function('state', 'document', 'google', 'originalChanged_', `
+    function say() {}
+    function targetName_() { return 'japonés'; }
+    function translationName_() { return 'inglés'; }
+    ${between(html, '  function restoreAiButton(', '  function showEtymology()')}
+    return {translateToGerman, translateToSpanish};
+  `)(state, {getElementById:id => fields[id], body:{contains:() => attached}}, {script:{run}}, () => reviewed++);
+  return {state, fields, start:toOriginal ? methods.translateToGerman : methods.translateToSpanish,
+    target:fields[toOriginal ? 'f-de' : 'f-es'], source:fields[toOriginal ? 'f-es' : 'f-de'],
+    button:fields[toOriginal ? 'ai-translate' : 'ai-translate-to-es'],
+    success:value => success(value), failure:() => failure({message:'Provider failed'}),
+    detach:() => attached = false, reviewed:() => reviewed, sent:() => sent};
+}
+for (const toOriginal of [false, true]) {
+  for (const changed of ['source', 'target', 'language', 'navigation']) {
+    const c = translationClient(toOriginal);
+    c.start();
+    assert.deepEqual(c.sent(), [toOriginal ? 'Translation' : 'Original', 1]);
+    if (changed === 'source') c.source.value = 'Manual source';
+    if (changed === 'target') c.target.value = 'Manual target';
+    if (changed === 'language') c.state.language.version++;
+    if (changed === 'navigation') c.detach();
+    const target = c.target.value;
+    c.success('Late AI result');
+    assert.equal(c.target.value, target);
+    assert.equal(c.state.languageBusy, 0);
+    assert.equal(c.reviewed(), 0);
+    if (changed !== 'navigation') assert.equal(c.button.disabled, false);
+  }
+  const accepted = translationClient(toOriginal);
+  accepted.start();
+  accepted.success('Fresh result');
+  assert.equal(accepted.target.value, 'Fresh result');
+  assert.equal(accepted.reviewed(), toOriginal ? 1 : 0);
+  const failed = translationClient(toOriginal);
+  failed.start();failed.failure();
+  assert.equal(failed.button.disabled, false);
+  assert.equal(failed.state.languageBusy, 0);
+}
+// A refresh may change the pair while generation is in flight.
+const staleGeneration = generatorClient();
+staleGeneration.generatePhrases_();
+staleGeneration.state.language.version++;
+staleGeneration.success(phrases);
+assert.equal(staleGeneration.state.generator.items.length, 0);
+assert.equal(staleGeneration.state.generator.busy, false);
+staleGeneration.generatePhrases_();
+staleGeneration.state.language.version++;
+staleGeneration.failure('Invalid JSON\n\nRespuesta de Gemini:\nOld diagnostic');
+assert.equal(staleGeneration.state.generator.debug, '');
+assert.equal(staleGeneration.state.generator.busy, false);
+const staleDraft = selectedClient();
+staleDraft.state.generator.generatedLanguageVersion = 0;
+staleDraft.state.language.version = 1;
+staleDraft.saveGeneratedPhrases_();
+assert.equal(staleDraft.sent(), undefined);
+console.log('AI callbacks preserve edits and discard outdated language drafts: OK');

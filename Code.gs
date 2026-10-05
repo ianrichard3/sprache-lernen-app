@@ -5,7 +5,7 @@
  *
  * Hoja "Frases":
  * A: ID | B: Frase objetivo | C: Traducción | D: Notas | E: Estado | F: Etiquetas
- * G: Creado | H: Actualizado | I: Incluida en material
+ * G: Creado | H: Actualizado | I: Incluida en material | J: Pronunciación | K: Lectura en kana
  *
  * Hoja "Historial": ID | Resultado | Estudiado
  *
@@ -36,10 +36,10 @@ const HISTORY_WIDTH = HISTORY_HEADERS.length;
 const HISTORY_LIMIT = 20;
 
 const HEADERS = [
-  'ID', 'Frase objetivo', 'Traducción', 'Notas', 'Estado', 'Etiquetas', 'Creado', 'Actualizado', 'Incluida en material'
+  'ID', 'Frase objetivo', 'Traducción', 'Notas', 'Estado', 'Etiquetas', 'Creado', 'Actualizado', 'Incluida en material', 'Pronunciación', 'Lectura en kana'
 ];
 
-const COL = { ID: 1, DE: 2, ES: 3, NOTES: 4, STATUS: 5, TAGS: 6, CREATED: 7, UPDATED: 8, PRINTED_AT: 9 };
+const COL = { ID: 1, DE: 2, ES: 3, NOTES: 4, STATUS: 5, TAGS: 6, CREATED: 7, UPDATED: 8, PRINTED_AT: 9, PRONUNCIATION: 10, KANA: 11 };
 const WIDTH = HEADERS.length;
 
 const STATUSES = ['Nueva', 'En práctica', 'Dominada'];
@@ -81,8 +81,8 @@ const ETYMOLOGY_INSTRUCTION = [
 
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu('Frases')
-    .addItem('Abrir frases', 'showApp')
+    .createMenu('Sprache Lernen App')
+    .addItem('Abrir app', 'showApp')
     .addSeparator()
     .addItem('Preparar hoja', 'setupSheet')
     .addItem('Migrar desde "Grabado"', 'migrateSheet')
@@ -94,12 +94,12 @@ function showApp() {
   const html = HtmlService.createHtmlOutputFromFile('App')
     .setWidth(1000)
     .setHeight(640);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Frases para estudiar');
+  SpreadsheetApp.getUi().showModalDialog(html, 'Sprache Lernen App');
 }
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('App')
-    .setTitle('Frases para estudiar')
+    .setTitle('Sprache Lernen App')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .addMetaTag('mobile-web-app-capable', 'yes')
     .addMetaTag('apple-mobile-web-app-capable', 'yes');
@@ -126,6 +126,7 @@ function registerSpreadsheet_() {
 function targetLanguage_() {
   const saved = PropertiesService.getScriptProperties().getProperty(LANGUAGE_PROPERTY);
   const language = saved ? JSON.parse(saved) : { name: 'alemán', locale: 'de-DE' };
+  language.translation = language.translation || { name: 'español', locale: 'es-ES' };
   language.version = Number(language.version) || 0;
   return language;
 }
@@ -142,35 +143,42 @@ function languageHeading_() {
 }
 
 function saveLanguageSettings(payload) {
-  if (!payload || typeof payload.name !== 'string' || typeof payload.locale !== 'string') {
-    throw new Error('Elegí un idioma y un código de voz válido.');
+  function validatedLanguage(value) {
+    if (!value || typeof value.name !== 'string' || typeof value.locale !== 'string') {
+      throw new Error('Elegí un idioma y un código de idioma válido.');
+    }
+    const name = normalize_(value.name).toLowerCase();
+    const locale = normalize_(value.locale);
+    if (!name || name.length > 40 || /[<>:"/\\|?*\r\n\x00-\x1f]/.test(name) ||
+        !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(locale)) {
+      throw new Error('Elegí un idioma y un código válido, por ejemplo fr-FR.');
+    }
+    return { name: name, locale: locale };
   }
-  const name = normalize_(payload.name);
-  const locale = normalize_(payload.locale);
-  if (!name || name.length > 40 || /[<>:"/\\|?*\r\n\x00-\x1f]/.test(name) ||
-      !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(locale)) {
-    throw new Error('Elegí un idioma y un código de voz válido, por ejemplo fr-FR.');
-  }
+  const target = validatedLanguage(payload);
+  const translation = validatedLanguage(payload.translation || targetLanguage_().translation);
   return withLock_(function () {
     assertLanguageVersion_(payload.expectedVersion);
     const properties = PropertiesService.getScriptProperties();
     const previous = properties.getProperty(LANGUAGE_PROPERTY);
     const current = targetLanguage_();
-    const language = { name: name.toLowerCase(), locale: locale,
-      version: current.version + (current.name === name.toLowerCase() && current.locale === locale ? 0 : 1) };
+    const changed = current.name !== target.name || current.locale !== target.locale ||
+      current.translation.name !== translation.name || current.translation.locale !== translation.locale;
+    const language = { name: target.name, locale: target.locale, translation: translation, version: current.version + (changed ? 1 : 0) };
     const sheet = getSpreadsheet_().getSheetByName(SHEET_NAME);
-    const heading = sheet ? sheet.getRange(1, COL.DE) : null;
-    const previousHeading = heading ? heading.getValue() : null;
+    const heading = sheet ? sheet.getRange(1, COL.DE, 1, 2) : null;
+    const previousHeading = heading ? heading.getValues() : null;
     properties.setProperty(LANGUAGE_PROPERTY, JSON.stringify(language));
     try {
-      if (heading) heading.setValue('Frase (' + locale.split('-')[0].toUpperCase() + ')');
+      if (heading) heading.setValues([['Frase (' + target.locale.split('-')[0].toUpperCase() + ')',
+        'Traducción (' + translation.locale.split('-')[0].toUpperCase() + ')']]);
     } catch (error) {
       try {
         if (previous === null) properties.deleteProperty(LANGUAGE_PROPERTY);
         else properties.setProperty(LANGUAGE_PROPERTY, previous);
-        if (heading) heading.setValue(previousHeading);
+        if (heading) heading.setValues(previousHeading);
       } catch (rollbackError) {
-        throw new Error('No se pudo guardar el idioma y la recuperación automática falló. Actualizá los datos antes de continuar.');
+        throw new Error('No se pudo guardar el par de idiomas y la recuperación automática falló. Actualizá los datos antes de continuar.');
       }
       throw error;
     }
@@ -178,10 +186,17 @@ function saveLanguageSettings(payload) {
   });
 }
 
+function ensurePhraseColumns_(sheet) {
+  const columns = sheet.getMaxColumns();
+  if (columns < WIDTH) sheet.insertColumnsAfter(columns, WIDTH - columns);
+  return sheet;
+}
+
 function getSheet_(ss) {
   ss = ss || getSpreadsheet_();
   const sheet = ss.getSheetByName(SHEET_NAME);
-  return sheet || buildSheet_(ss.insertSheet(SHEET_NAME));
+  if (!sheet) return buildSheet_(ss.insertSheet(SHEET_NAME));
+  return ensurePhraseColumns_(sheet);
 }
 
 function getHistorySheet_(ss) {
@@ -222,8 +237,10 @@ function setupSheet() {
 }
 
 function buildSheet_(sheet) {
+  ensurePhraseColumns_(sheet);
   sheet.getRange(1, 1, 1, WIDTH)
-    .setValues([[HEADERS[0], 'Frase (' + targetLanguage_().locale.split('-')[0].toUpperCase() + ')'].concat(HEADERS.slice(2))])
+    .setValues([[HEADERS[0], 'Frase (' + targetLanguage_().locale.split('-')[0].toUpperCase() + ')',
+      'Traducción (' + targetLanguage_().translation.locale.split('-')[0].toUpperCase() + ')'].concat(HEADERS.slice(3))])
     .setFontWeight('bold')
     .setBackground('#16202b')
     .setFontColor('#ffffff')
@@ -232,7 +249,7 @@ function buildSheet_(sheet) {
   sheet.setFrozenRows(1);
   sheet.setRowHeight(1, 32);
 
-  [80, 300, 300, 220, 110, 180, 140, 140, 150].forEach(function (width, i) {
+  [80, 300, 300, 220, 110, 180, 140, 140, 150, 260, 260].forEach(function (width, i) {
     sheet.setColumnWidth(i + 1, width);
   });
 
@@ -415,7 +432,9 @@ function rowToObject_(row) {
     tags: cleanTags_(row[COL.TAGS - 1]),
     created: toIso_(row[COL.CREATED - 1]),
     updated: toIso_(row[COL.UPDATED - 1]),
-    printedAt: toIso_(row[COL.PRINTED_AT - 1])
+    printedAt: toIso_(row[COL.PRINTED_AT - 1]),
+    pronunciation: normalize_(row[COL.PRONUNCIATION - 1]),
+    kana: normalize_(row[COL.KANA - 1])
   };
 }
 
@@ -1019,7 +1038,7 @@ function printPlan_(data, payload) {
 
 function printPlanSignature_(plan) {
   return JSON.stringify(plan.groups.map(function (group) {
-    const items = group.items.map(function (item) { return [item.id, item.de, item.es, item.printedAt]; });
+    const items = group.items.map(function (item) { return [item.id, item.de, item.es, item.pronunciation, item.kana]; });
     if (plan.order === 'random') items.sort(function (a, b) { return a[0].localeCompare(b[0]); });
     return [group.id, group.name, items];
   }));
@@ -1035,8 +1054,27 @@ function printMarkdownCell_(value) {
     .replace(/\r?\n|\r/g, '<br>');
 }
 
+function pronunciationParts_(item, japanese) {
+  return (japanese ? [item.kana, item.pronunciation] : [item.pronunciation])
+    .map(normalize_).filter(Boolean);
+}
+
+function printHasPronunciation_(plan, japanese) {
+  return plan.groups.some(function (group) {
+    return group.items.some(function (item) { return pronunciationParts_(item, japanese).length > 0; });
+  });
+}
+
+function translationHeading_() {
+  const name = targetLanguage_().translation.name;
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
 function printMarkdown_(plan, now) {
   const heading = languageHeading_();
+  const japanese = targetLanguage_().locale.split('-')[0] === 'ja';
+  const translationHeading = translationHeading_();
+  const pronunciation = printHasPronunciation_(plan, japanese);
   const lines = [
     '# ' + heading + ' – Frases para estudiar',
     '',
@@ -1045,9 +1083,11 @@ function printMarkdown_(plan, now) {
     ''
   ];
   plan.groups.forEach(function (group) {
-    lines.push('## ' + printMarkdownCell_(group.name), '', '| ' + printMarkdownCell_(heading) + ' | Español |', '| --- | --- |');
+    lines.push('## ' + printMarkdownCell_(group.name), '', '| ' + printMarkdownCell_(heading) +
+      (pronunciation ? ' | Pronunciación' : '') + ' | ' + printMarkdownCell_(translationHeading) + ' |',
+      pronunciation ? '| --- | --- | --- |' : '| --- | --- |');
     group.items.forEach(function (item) {
-      lines.push('| ' + printMarkdownCell_(item.de) + ' | ' + printMarkdownCell_(item.es) + ' |');
+      lines.push('| ' + printMarkdownCell_(item.de) + (pronunciation ? ' | ' + pronunciationParts_(item, japanese).map(printMarkdownCell_).join('<br>') : '') + ' | ' + printMarkdownCell_(item.es) + ' |');
     });
     lines.push('');
   });
@@ -1065,16 +1105,27 @@ function printHtmlCell_(value) {
 
 function printHtmlBody_(plan, now) {
   const heading = languageHeading_();
-  const locale = targetLanguage_().locale;
+  const language = targetLanguage_();
+  const japanese = language.locale.split('-')[0] === 'ja';
+  const translationHeading = translationHeading_();
+  const pronunciation = printHasPronunciation_(plan, japanese);
+  const translationLocale = language.translation.locale;
+  const locale = language.locale;
   const lines = [
     '<h1>' + printHtmlCell_(heading) + ' – Frases para estudiar</h1>',
     '<p class="material-meta">Generado el ' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') + ' · ' + plan.count + ' frases distintas' +
       (plan.rowCount !== plan.count ? ' · ' + plan.rowCount + ' filas' : '') + '</p>'
   ];
   plan.groups.forEach(function (group) {
-    lines.push('<section><h2>' + printHtmlCell_(group.name) + '</h2><table><thead><tr><th>' + printHtmlCell_(heading) + '</th><th>Español</th></tr></thead><tbody>');
+    lines.push('<section><h2>' + printHtmlCell_(group.name) + '</h2><table><thead><tr><th>' + printHtmlCell_(heading) + '</th>' + (pronunciation ? '<th data-print-pronunciation>Pronunciación</th>' : '') + '<th>' + printHtmlCell_(translationHeading) + '</th></tr></thead><tbody>');
     group.items.forEach(function (item) {
-      lines.push('<tr><td lang="' + printHtmlCell_(locale) + '">' + printHtmlCell_(item.de) + '</td><td>' + printHtmlCell_(item.es) + '</td></tr>');
+      const aids = (japanese ? ['kana', 'pronunciation'] : ['pronunciation']).map(function (field) {
+        const label = field === 'kana' ? 'Kana' : japanese ? 'Romaji' : 'Romanización';
+        return '<span data-pronunciation-field="' + field + '" data-phrase-id="' + printHtmlCell_(item.id) +
+          '" data-placeholder="' + label + ' (opcional)" role="textbox" aria-label="' + label + ' de ' + printHtmlCell_(item.id) + '">' + printHtmlCell_(item[field]) + '</span>';
+      }).join('');
+      lines.push('<tr data-phrase-id="' + printHtmlCell_(item.id) + '"><td lang="' + printHtmlCell_(locale) + '">' + printHtmlCell_(item.de) + '</td>' +
+        (pronunciation ? '<td data-print-pronunciation>' + aids + '</td>' : '') + '<td lang="' + printHtmlCell_(translationLocale) + '">' + printHtmlCell_(item.es) + '</td></tr>');
     });
     lines.push('</tbody></table></section>');
   });
@@ -1085,7 +1136,7 @@ function printHtmlDocument_(body, fontSize, lineHeight) {
   const size = [18, 20, 22, 24].indexOf(Number(fontSize)) !== -1 ? Number(fontSize) : 20;
   const leading = [1.4, 1.6, 1.8, 2].indexOf(Number(lineHeight)) !== -1 ? Number(lineHeight) : 1.6;
   return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + printHtmlCell_(languageHeading_()) + ' – Material</title><style>' +
-    '*,*::before,*::after{box-sizing:border-box}body{max-width:900px;margin:0 auto;padding:28px 24px;color:#111;font-family:Georgia,"Times New Roman",serif;font-size:' + size + 'px;line-height:' + leading + '}h1{margin:0 0 .25em;font-size:1.45em;line-height:1.15}h2{margin:1.5em 0 .45em;font-size:1.1em;line-height:1.2;break-after:avoid;page-break-after:avoid}.material-meta{margin:0 0 1.5em;color:#555;font: .65em/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}table{width:100%;border-collapse:collapse;table-layout:fixed;margin:0 0 1.4em}th,td{border:1px solid #777;padding:.65em .6em;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#eee;font:.72em/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-transform:uppercase;letter-spacing:.04em}tr{break-inside:avoid;page-break-inside:avoid}section{break-inside:auto;page-break-inside:auto}@media print{body{max-width:none;padding:12mm 10mm}h2{break-before:page;page-break-before:always}section:first-of-type h2{break-before:auto;page-break-before:auto}}' +
+    '*,*::before,*::after{box-sizing:border-box}body{max-width:900px;margin:0 auto;padding:28px 24px;color:#111;font-family:Georgia,"Times New Roman",serif;font-size:' + size + 'px;line-height:' + leading + '}h1{margin:0 0 .25em;font-size:1.45em;line-height:1.15}h2{margin:1.5em 0 .45em;font-size:1.1em;line-height:1.2;break-after:avoid;page-break-after:avoid}.material-meta{margin:0 0 1.5em;color:#555;font: .65em/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}table{width:100%;border-collapse:collapse;table-layout:fixed;margin:0 0 1.4em}th,td{border:1px solid #777;padding:.65em .6em;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#eee;font:.72em/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-transform:uppercase;letter-spacing:.04em}tr{break-inside:avoid;page-break-inside:avoid}[data-pronunciation-field]{display:block;white-space:pre-wrap}section{break-inside:auto;page-break-inside:auto}@media print{body{max-width:none;padding:12mm 10mm}h2{break-before:page;page-break-before:always}section:first-of-type h2{break-before:auto;page-break-before:auto}}' +
     '</style></head><body>' + body + '</body></html>';
 }
 
@@ -1106,6 +1157,10 @@ function markPhrasesPrinted_(table, phraseIds, now) {
     return isIncluded ? [now, now] : [row[COL.UPDATED - 1], row[COL.PRINTED_AT - 1]];
   });
   table.sheet.getRange(2, COL.UPDATED, columns.length, 2).setValues(columns);
+  table.values.forEach(function (row, index) {
+    row[COL.UPDATED - 1] = columns[index][0];
+    row[COL.PRINTED_AT - 1] = columns[index][1];
+  });
 }
 
 function generatePhraseMarkdown(payload) {
@@ -1127,6 +1182,61 @@ function generatePhraseMarkdown(payload) {
   });
 }
 
+function printPronunciationSnapshot_(plan, table) {
+  const included = new Set(plan.phraseIds.map(collectionIdKey_));
+  return table.values.filter(function (row) { return included.has(collectionIdKey_(row[COL.ID - 1])); })
+    .map(function (row) {
+      const item = rowToObject_(row);
+      return { id: item.id, pronunciation: item.pronunciation, kana: item.kana, updated: item.updated };
+    });
+}
+
+/** Guarda sólo las ayudas editadas; conserva texto, traducción, progreso y colecciones. */
+function saveMaterialPronunciations(payload) {
+  if (!payload || !Array.isArray(payload.edits) || !payload.edits.length || typeof payload.previewSignature !== 'string' || !payload.previewSignature) {
+    throw new Error('Previsualizá el material antes de guardar la pronunciación.');
+  }
+  return withLock_(function () {
+    assertLanguageVersion_(payload.expectedLanguageVersion);
+    const data = collectionData_(getSpreadsheet_());
+    const plan = printPlan_(data, payload);
+    if (payload.previewSignature !== plan.signature) throw new Error('Los datos cambiaron. Volvé a previsualizar el material antes de guardar.');
+    const included = new Set(plan.phraseIds.map(collectionIdKey_));
+    const seen = new Set();
+    const rowIndices = new Map(data.phraseTable.values.map(function (row, index) { return [collectionIdKey_(row[COL.ID - 1]), index]; }));
+    const changes = payload.edits.map(function (edit) {
+      const key = collectionIdKey_(edit && edit.id);
+      if (!included.has(key) || seen.has(key)) throw new Error('Elegí sólo frases distintas incluidas en la vista previa.');
+      seen.add(key);
+      const item = data.phrases.byId[key];
+      if (typeof edit.expectedUpdated !== 'string' || edit.expectedUpdated !== item.updated) {
+        throw new Error('La frase cambió en la planilla. Volvé a previsualizar el material antes de guardar.');
+      }
+      if (typeof edit.pronunciation !== 'string' || typeof edit.kana !== 'string') throw new Error('Completá las ayudas con texto.');
+      const aids = pronunciationFields_(edit);
+      return { item: item, aids: aids, rowIndex: rowIndices.get(key) };
+    });
+    const now = new Date();
+    const changed = [];
+    changes.forEach(function (change) {
+      const row = data.phraseTable.values[change.rowIndex];
+      if (normalize_(row[COL.PRONUNCIATION - 1]) === change.aids.pronunciation && normalize_(row[COL.KANA - 1]) === change.aids.kana) return;
+      row[COL.PRONUNCIATION - 1] = change.aids.pronunciation;
+      row[COL.KANA - 1] = change.aids.kana;
+      row[COL.PRINTED_AT - 1] = '';
+      row[COL.UPDATED - 1] = now;
+      Object.assign(change.item, rowToObject_(row));
+      changed.push(change.item);
+    });
+    if (changed.length) {
+      data.phraseTable.sheet.getRange(2, COL.UPDATED, data.phraseTable.values.length, 4)
+        .setValues(data.phraseTable.values.map(function (row) { return row.slice(COL.UPDATED - 1, COL.KANA); }));
+    }
+    return { items: changed, body: printHtmlBody_(plan, now), signature: printPlanSignature_(plan),
+      phrases: printPronunciationSnapshot_(plan, data.phraseTable) };
+  });
+}
+
 function previewPhraseMaterial(payload) {
   return withLock_(function () {
     assertLanguageVersion_(payload && payload.expectedLanguageVersion);
@@ -1138,7 +1248,8 @@ function previewPhraseMaterial(payload) {
       includedCount: plan.count,
       rowCount: plan.rowCount,
       name: printHtmlFileName_(now),
-      signature: plan.signature
+      signature: plan.signature,
+      phrases: printPronunciationSnapshot_(plan, data.phraseTable)
     };
   });
 }
@@ -1163,7 +1274,8 @@ function generatePhraseHtml(payload) {
       includedCount: plan.count,
       rowCount: plan.rowCount,
       markedAt: toIso_(now),
-      signature: plan.signature
+      signature: plan.signature,
+      phrases: printPronunciationSnapshot_(plan, data.phraseTable)
     };
   });
 }
@@ -1270,14 +1382,25 @@ function restorePhraseMemberships_(sheet, originalTable, phraseId) {
 }
 
 /** Guarda la frase y sus colecciones con un único lock. */
-function phraseContentChanged_(row, de, es) {
-  return normalize_(row[COL.DE - 1]) !== de || normalize_(row[COL.ES - 1]) !== es;
+function phraseContentChanged_(row, de, es, pronunciation, kana) {
+  return normalize_(row[COL.DE - 1]) !== de || normalize_(row[COL.ES - 1]) !== es ||
+    normalize_(row[COL.PRONUNCIATION - 1]) !== normalize_(pronunciation) || normalize_(row[COL.KANA - 1]) !== normalize_(kana);
+}
+
+function pronunciationFields_(payload) {
+  const fields = {};
+  ['pronunciation', 'kana'].forEach(function (key) {
+    if (payload[key] != null && typeof payload[key] !== 'string') throw new Error('La pronunciación y la lectura en kana deben ser texto.');
+    fields[key] = normalize_(payload[key]);
+  });
+  return fields;
 }
 
 function savePhrase(payload) {
   const id = normalize_(payload && payload.id);
   const de = normalize_(payload && payload.de);
   const es = normalize_(payload && payload.es);
+  const aids = pronunciationFields_(payload || {});
   if (!de) throw new Error('La frase en ' + targetLanguage_().name + ' no puede quedar vacía.');
 
   return withLock_(function () {
@@ -1303,11 +1426,14 @@ function savePhrase(payload) {
       const duplicate = duplicateOf_(table, de, id);
       if (duplicate) throw new Error('Esa frase ya está cargada como ' + duplicate + '.');
 
+      if (payload.pronunciation == null) aids.pronunciation = normalize_(current[COL.PRONUNCIATION - 1]);
+      if (payload.kana == null) aids.kana = normalize_(current[COL.KANA - 1]);
       originalRow = current.slice();
       row = [
         id, de, es, normalize_(payload.notes), current[COL.STATUS - 1],
         cleanTags_(payload.tags).join(', '), current[COL.CREATED - 1] || now, now,
-        phraseContentChanged_(current, de, es) ? '' : current[COL.PRINTED_AT - 1] || ''
+        phraseContentChanged_(current, de, es, aids.pronunciation, aids.kana) ? '' : current[COL.PRINTED_AT - 1] || '',
+        aids.pronunciation, aids.kana
       ];
     } else {
       const duplicate = duplicateOf_(table, de, null);
@@ -1316,7 +1442,7 @@ function savePhrase(payload) {
       rowIndex = table.lastRow + 1 || 2;
       row = [
         nextId_(table), de, normalize_(payload.es), normalize_(payload.notes), cleanStatus_(payload.status),
-        cleanTags_(payload.tags).join(', '), now, now, ''
+        cleanTags_(payload.tags).join(', '), now, now, '', aids.pronunciation, aids.kana
       ];
     }
 
@@ -1347,7 +1473,7 @@ function saveGeneratedPhrases(payload) {
   const items = payload && payload.items;
   if (!Array.isArray(items) || !items.length || items.length > 10 || items.some(function (item) {
     return !item || typeof item.de !== 'string' || typeof item.es !== 'string' || !item.de.trim() || !item.es.trim();
-  })) throw new Error('Seleccioná entre 1 y 10 frases con ' + targetLanguage_().name + ' y español completos.');
+  })) throw new Error('Seleccioná entre 1 y 10 frases con ' + targetLanguage_().name + ' y ' + targetLanguage_().translation.name + ' completos.');
   return withLock_(function () {
     assertLanguageVersion_(payload && payload.expectedLanguageVersion);
     const ss = getSpreadsheet_();
@@ -1371,11 +1497,12 @@ function saveGeneratedPhrases(payload) {
     const now = new Date();
     let lastId = lastIdNumber_(phrases);
     const results = items.map(function (item) {
+      const aids = pronunciationFields_(item);
       const key = normalizeKey_(item.de);
       let row = known.get(key);
       const reused = !!row;
       if (!row) {
-        row = [formatId_(++lastId), item.de.trim(), item.es.trim(), '', DEFAULT_STATUS, '', now, now, ''];
+        row = [formatId_(++lastId), item.de.trim(), item.es.trim(), '', DEFAULT_STATUS, '', now, now, '', aids.pronunciation, aids.kana];
         known.set(key, row);
         additions.push(row);
       }
@@ -1474,10 +1601,22 @@ function importPhrases(payload) {
   const columnCount = columnCount_(rows);
   const firstRow = payload && payload.hasHeader ? 1 : 0;
 
-  if (!isFinite(deColumn) || !isFinite(esColumn) || deColumn < 0 || esColumn < 0 ||
+  if (!Number.isInteger(deColumn) || !Number.isInteger(esColumn) || deColumn < 0 || esColumn < 0 ||
       deColumn >= columnCount || esColumn >= columnCount || deColumn === esColumn) {
-    throw new Error('Elegí columnas distintas para ' + targetLanguage_().name + ' y español.');
+    throw new Error('Elegí columnas distintas para ' + targetLanguage_().name + ' y ' + targetLanguage_().translation.name + '.');
   }
+
+  const optionalColumns = ['pronunciationColumn', 'kanaColumn'].map(function (key) {
+    return payload[key] == null || payload[key] === '' ? -1 : Number(payload[key]);
+  });
+  const selectedColumns = [deColumn, esColumn];
+  optionalColumns.forEach(function (column) {
+    if (!Number.isInteger(column) || column < -1 || column >= columnCount ||
+        (column !== -1 && selectedColumns.indexOf(column) !== -1)) {
+      throw new Error('Elegí columnas distintas y válidas para las ayudas de pronunciación.');
+    }
+    if (column !== -1) selectedColumns.push(column);
+  });
 
   return withLock_(function () {
     assertLanguageVersion_(payload && payload.expectedLanguageVersion);
@@ -1511,7 +1650,8 @@ function importPhrases(payload) {
       known[key] = true;
       lastId++;
       additions.push([
-        formatId_(lastId), de, normalize_(source[esColumn]), '', DEFAULT_STATUS, '', now, now, ''
+        formatId_(lastId), de, normalize_(source[esColumn]), '', DEFAULT_STATUS, '', now, now, '',
+        normalize_(source[optionalColumns[0]]), normalize_(source[optionalColumns[1]])
       ]);
     });
 
@@ -1654,12 +1794,14 @@ function onEdit(e) {
   return withLock_(function () {
   const editFirstColumn = e.range.getColumn();
   const editLastColumn = editFirstColumn + e.range.getNumColumns() - 1;
-  const contentEdited = editFirstColumn <= COL.ES && editLastColumn >= COL.DE;
+  const contentEdited = (editFirstColumn <= COL.ES && editLastColumn >= COL.DE) ||
+    (editFirstColumn <= COL.KANA && editLastColumn >= COL.PRONUNCIATION);
 
   const first = Math.max(e.range.getRow(), 2);
   const last = e.range.getRow() + e.range.getNumRows() - 1;
   if (last < 2) return;
 
+  ensurePhraseColumns_(sheet);
   const count = last - first + 1;
   const range = sheet.getRange(first, 1, count, WIDTH);
   const values = range.getValues();

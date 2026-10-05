@@ -198,11 +198,11 @@ toggleSupport.toggleSupport_('german');
 assert.equal(toggleSupport.state.session.revealedIndex, 0);
 
 const sessionRow = Function(
-  "var state = {language:{locale:'de-DE'}, session:{phase:'listen', supports:{german:false, spanish:false}, revealedIndex:null}};\n" +
+  "var state = {language:{locale:'de-DE', translation:{name:'español', locale:'es-ES'}}, session:{phase:'listen', supports:{german:false, spanish:false}, revealedIndex:null}};\n" +
   "var player = {index:0, playing:false, voice:{}};\n" +
   "function recallPhase_() { return state.session.phase === 'recall'; }\n" +
   "function germanVisible_(index) { return recallPhase_() ? state.session.revealedIndex === index : state.session.supports.german; }\n" +
-  "function targetName_() { return 'alemán'; }\n" +
+  "function targetName_() { return 'alemán'; } function pronunciationHtml_() { return ''; }\n" +
   "function esc(value) { return String(value); }\n" +
   between(html, '  function sessionRowHtml_(item, index) {', '\n\n  function sessionListHtml_') +
   '\nreturn {state:state, row:sessionRowHtml_};'
@@ -318,3 +318,29 @@ assert.throws(() => withScriptLock(() => { throw new Error('write error'); }), /
 assert.equal(lockHeld, false);
 assert.equal(releases, 2);
 console.log('Web app script lock and release on failure: OK');
+
+// Audio in recall is governed by the revealed phrase, just like the visible play button.
+const recallAudio = Function(`
+  var state = {session:{phase:'recall', supports:{german:false}, revealedIndex:null}};
+  var player = {index:0, playing:false, token:0};
+  var cycles = 0;
+  function currentPlayerItem_() { return {id:'F1'}; }
+  function playerVoiceReady_() { return true; }
+  function playPlayerCycle_() { cycles++; }
+  function updatePlayerUi_() {}
+  ${between(html, '  function recallPhase_()', '  function replaceSessionRow_')}
+  ${between(html, '  function startPlayer_()', '  function togglePlayer_')}
+  return {state, player, startPlayer_, cycles:() => cycles};
+`)();
+recallAudio.startPlayer_();
+assert.equal(recallAudio.cycles(), 0);
+recallAudio.state.session.revealedIndex = 0;
+recallAudio.startPlayer_();
+assert.equal(recallAudio.cycles(), 1);
+recallAudio.state.session.revealedIndex = 1;
+recallAudio.startPlayer_();
+assert.equal(recallAudio.cycles(), 1, 'Another revealed row does not reveal the current phrase');
+recallAudio.state.session.phase = 'listen';
+recallAudio.startPlayer_();
+assert.equal(recallAudio.cycles(), 2, 'Listening remains available with hidden original');
+console.log('Recall audio starts only after revealing the current phrase: OK');

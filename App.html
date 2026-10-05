@@ -57,6 +57,7 @@
   .study-card { max-width:720px; margin:28px auto; padding:28px; text-align:center; }
   .question { margin:26px 0; font-size:clamp(24px,5vw,38px); line-height:1.25; font-weight:700; }
   .answer { margin:0 0 22px; font:28px/1.3 Georgia,"Times New Roman",serif; }
+  .pronunciation { display:block; margin:4px 0 10px; color:var(--muted); white-space:pre-wrap; font-size:15px; }
   .notes { margin:0 0 22px; color:var(--muted); }
   .study-actions,.form-actions { display:flex; justify-content:center; gap:8px; flex-wrap:wrap; }
   .manage-grid { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:20px; align-items:start; }
@@ -120,6 +121,8 @@
   .print-preview-content table { width:100%; border-collapse:collapse; table-layout:fixed; margin:0 0 1.4em; }
   .print-preview-content th,.print-preview-content td { padding:.65em .6em; border:1px solid #777; text-align:left; vertical-align:top; overflow-wrap:anywhere; }
   .print-preview-content th { background:#eee; font:.72em/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; text-transform:uppercase; letter-spacing:.04em; }
+  .print-preview-content [data-pronunciation-field] { display:block; min-height:1em; white-space:pre-wrap; }
+  .print-preview-content [data-pronunciation-field]:empty::before { content:attr(data-placeholder); color:var(--muted); font-size:.7em; }
   .print-preview-content tr { break-inside:avoid; page-break-inside:avoid; }
   @media (max-width:760px) { .print-settings { grid-template-columns:1fr; } .print-preview-content { padding:16px; } }
   .session-layout { display:grid; grid-template-columns:270px minmax(0,1fr); gap:20px; align-items:start; }
@@ -158,7 +161,7 @@
 <body>
 <div id="app">
   <header class="topbar">
-    <div class="brand">Frases para estudiar</div>
+    <div class="brand">Sprache Lernen App</div>
     <nav aria-label="Secciones">
       <button class="nav" data-act="switch-view" data-view="study">Estudiar</button>
       <button class="nav" data-act="switch-view" data-view="collections">Colecciones</button>
@@ -180,14 +183,14 @@
 
   var state = {
     loadingData: false,
-    setup: null, language: {name:'alemán', locale:'de-DE', version:0}, languageChoice:'de-DE', customName:'', customLocale:'', configSaving:false, languageBusy:0,
+    setup: null, language: {name:'alemán', locale:'de-DE', translation:{name:'español', locale:'es-ES'}, version:0}, languageChoice:'de-DE', customName:'', customLocale:'', configSaving:false, languageBusy:0, translationChoice:'es-ES', customTranslationName:'', customTranslationLocale:'', showPronunciation:true,
     items: [], history: [], view: 'study', detailId: null, revealed: false,
     saving: false, editing: null, editingCollectionIds: null, studyTab: 'phrases', studyPage: 1, studyQuery: '', managePage: 1, manageQuery: '', importText: '',
     importPreview: null, importHasHeader: true, importDelimiter: ',',
-    generator: { context:'', level:'intermediate', generatedLevel:null, items:[], collectionIds:[], busy:false, saving:false, debug:'' },
+    generator: { context:'', level:'intermediate', generatedLevel:null, generatedLanguageVersion:null, items:[], collectionIds:[], busy:false, saving:false, debug:'' },
     etymologyText: '', etymologyResult: '',
     collections: [], memberIdsByCollection: {}, collectionsLoaded: false, collectionQuery: '', collectionId: null, collection: null, collectionEditor: null, collectionPhraseQuery: '', collectionPage: 1, collectionEditorPage: 1, collectionCandidatePage: 1, collectionSelection: {}, collectionPhraseDraft: false,
-    printScope: 'all', printCollectionIds: [], printOnlyUnprinted: false, printOrder: 'manual', printFormat: 'html', printFontSize: 20, printLineHeight: 1.6, printRevision: 0, printGenerating: false, printPreviewLoading: false, printPreview: null, printResult: null,
+    printScope: 'all', printCollectionIds: [], printOnlyUnprinted: false, printOrder: 'manual', printFormat: 'html', printFontSize: 20, printLineHeight: 1.6, printRevision: 0, printGenerating: false, printPreviewLoading: false, printPreviewSaving: false, printPreview: null, printResult: null,
     session: { phase:'free', order:'manual', items:[], supports:{ german:true, spanish:false }, controlsOpen:true, revealedIndex:null },
     playerSettings: playerSettings_()
   };
@@ -201,13 +204,46 @@
   var LANGUAGES = [
     {name:'alemán', locale:'de-DE'}, {name:'inglés', locale:'en-US'},
     {name:'francés', locale:'fr-FR'}, {name:'italiano', locale:'it-IT'},
-    {name:'portugués', locale:'pt-BR'}, {name:'japonés', locale:'ja-JP'}
+    {name:'portugués', locale:'pt-BR'}, {name:'japonés', locale:'ja-JP'},
+    {name:'español', locale:'es-ES'}, {name:'ruso', locale:'ru-RU'}, {name:'chino mandarín', locale:'zh-CN'}
   ];
 
   function targetName_() { return state.language.name; }
+  function translationName_() { return state.language.translation.name; }
+  function japanese_() { return state.language.locale.split('-')[0] === 'ja'; }
+
+  function pronunciationHtml_(item) {
+    var parts = (japanese_() ? [item.kana, item.pronunciation] : [item.pronunciation]).filter(Boolean);
+    return state.showPronunciation && parts.length ? '<span class="pronunciation">' + parts.map(esc).join('<br>') + '</span>' : '';
+  }
+
+  function pronunciationToggleHtml_() {
+    return '<button class="ghost" data-act="toggle-pronunciation" aria-pressed="' + state.showPronunciation + '">' +
+      (state.showPronunciation ? 'Ocultar' : 'Mostrar') + ' pronunciación</button>';
+  }
+
+  function pronunciationFieldsHtml_(item, index, locked) {
+    item = item || {};
+    var generated = index != null;
+    var prefix = generated ? 'generated-' : 'f-';
+    var suffix = generated ? '-' + index : '';
+    function field(key, label) {
+      return '<div class="field"><label for="' + prefix + key + suffix + '">' + label + ' (opcional)</label><textarea id="' + prefix + key + suffix + '"' +
+        (generated ? ' data-generator-field="' + key + '" data-index="' + index + '"' : '') + (locked || '') + '>' + esc(item[key]) + '</textarea></div>';
+    }
+    return (japanese_() ? field('kana', 'Lectura completa en kana (sin kanji)') : '') +
+      field('pronunciation', japanese_() ? 'Romaji' : 'Pronunciación / romanización') +
+      '<p class="hint" id="' + prefix + 'pronunciation-warning' + suffix + '"' + (item.pronunciationNeedsReview ? '' : ' hidden') + '>El original cambió: revisá su pronunciación.</p>' +
+      '<div class="ai-actions"><button class="ghost" data-act="suggest-pronunciation"' + (generated ? ' data-index="' + index + '"' : '') +
+      (item.pronunciationBusy ? ' disabled' : locked || '') + '>' + (item.pronunciationBusy ? 'Sugiriendo…' : 'Sugerir pronunciación con IA') + '</button></div><p class="hint">Editable. La sugerencia no guarda la frase.</p>';
+  }
 
   function languageDraft_(language) {
+    language.translation = language.translation || {name:'español', locale:'es-ES'};
     state.language = language;
+    state.translationChoice = LANGUAGES.some(function (item) { return item.locale === language.translation.locale && item.name === language.translation.name; }) ? language.translation.locale : 'other';
+    state.customTranslationName = language.translation.name;
+    state.customTranslationLocale = language.translation.locale;
     state.languageChoice = LANGUAGES.some(function (item) { return item.locale === language.locale && item.name === language.name; }) ? language.locale : 'other';
     state.customName = language.name;
     state.customLocale = language.locale;
@@ -299,9 +335,10 @@
   function applyAppData_(data) {
     if (state.language.version !== (data.language || {}).version) {
       state.generator.items = [];
-      state.generator.generatedLevel = null;
+      state.generator.generatedLevel = null; state.generator.generatedLanguageVersion = null;
       state.importPreview = null;
       state.printPreview = null;
+      state.etymologyResult = '';
     }
     state.setup = null;
     languageDraft_(data.language || {name:'alemán', locale:'de-DE', version:0});
@@ -339,7 +376,7 @@
   function playerSettings_() {
     var defaults = { rate:1, pause:1000, reps:1 };
     try {
-      var saved = JSON.parse(localStorage.getItem('deutsch-player-settings') || '{}');
+      var saved = JSON.parse(localStorage.getItem('sprache-lernen-player-settings') || localStorage.getItem('deutsch-player-settings') || '{}');
       if ([0.75, 1, 1.25].indexOf(Number(saved.rate)) !== -1) defaults.rate = Number(saved.rate);
       if ([1000, 2000, 3000, 5000].indexOf(Number(saved.pause)) !== -1) defaults.pause = Number(saved.pause);
       if ([1, 2, 3, 4, 5].indexOf(Number(saved.reps)) !== -1) defaults.reps = Number(saved.reps);
@@ -348,10 +385,10 @@
   }
 
   function savePlayerSettings_() {
-    try { localStorage.setItem('deutsch-player-settings', JSON.stringify(state.playerSettings)); } catch (err) {}
+    try { localStorage.setItem('sprache-lernen-player-settings', JSON.stringify(state.playerSettings)); } catch (err) {}
   }
 
-  function germanVoice_() {
+  function targetVoice_() {
     if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return null;
     var voices = window.speechSynthesis.getVoices();
     function language(voice) { return String(voice.lang || '').toLowerCase().replace('_', '-'); }
@@ -412,7 +449,7 @@
   }
 
   function playerVoiceReady_() {
-    player.voice = germanVoice_();
+    player.voice = targetVoice_();
     return player.voice;
   }
 
@@ -464,7 +501,7 @@
     if (progress) progress.textContent = item ? (player.index + 1) + ' de ' + items.length : '';
     if (quick) quick.innerHTML = sessionQuickControlHtml_();
     if (germanSupport) germanSupport.textContent = recallPhase_() ? (germanVisible_(player.index) ? 'Ocultar ' + targetName_() : 'Revelar ' + targetName_()) : (state.session.supports.german ? 'Ocultar ' + targetName_() : 'Mostrar ' + targetName_());
-    if (spanishSupport) spanishSupport.textContent = state.session.supports.spanish ? 'Ocultar español' : 'Mostrar español';
+    if (spanishSupport) spanishSupport.textContent = (state.session.supports.spanish ? 'Ocultar ' : 'Mostrar ') + translationName_();
     updateSessionRows_(scrollActive);
   }
 
@@ -515,7 +552,7 @@
   }
 
   function startPlayer_() {
-    if (!sessionItems_().length || (recallPhase_() && !state.session.supports.german)) return;
+    if (!currentAudioAvailable_()) return;
     if (!playerVoiceReady_()) { updatePlayerUi_(); return; }
     player.playing = true;
     var token = ++player.token;
@@ -683,7 +720,7 @@
     query = String(query || '').toLowerCase();
     if (!query) return items;
     return items.filter(function (item) {
-      return (item.id + ' ' + item.de + ' ' + item.es + ' ' + item.notes + ' ' +
+      return (item.id + ' ' + item.de + ' ' + item.es + ' ' + (item.pronunciation || '') + ' ' + (item.kana || '') + ' ' + item.notes + ' ' +
         item.tags.join(' ')).toLowerCase().indexOf(query) !== -1;
     });
   }
@@ -772,9 +809,9 @@
     if (state.studyTab === 'history') content = historyPanelHtml();
     else if (item) {
       content = '<section class="card study-card" id="study-phrases"><button class="link" data-act="back-study">← Volver al listado</button>' +
-        '<p class="question">' + esc(item.es || 'Sin traducción') + '</p>' +
+        '<p class="question" lang="' + esc(state.language.translation.locale) + '">' + esc(item.es || 'Sin traducción') + '</p>' +
         (state.revealed
-          ? '<p class="answer" lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</p>' + (item.notes ? '<p class="notes">' + esc(item.notes) + '</p>' : '') +
+          ? '<p class="answer" lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</p>' + pronunciationHtml_(item) + pronunciationToggleHtml_() + (item.notes ? '<p class="notes">' + esc(item.notes) + '</p>' : '') +
             '<div class="study-actions"><button class="good" data-act="result" data-correct="true"' + (state.saving ? ' disabled' : '') + '>Lo hice bien</button>' +
             '<button class="bad" data-act="result" data-correct="false"' + (state.saving ? ' disabled' : '') + '>Me costó</button><button class="ghost" data-act="edit" data-id="' + esc(item.id) + '">Editar frase</button></div>'
           : '<div class="study-actions"><button class="primary" data-act="reveal">Ver ' + esc(targetName_()) + '</button></div>') +
@@ -797,8 +834,9 @@
     var inCollection = !!collectionId;
     var selectedIds = inCollection ? [collectionId] : (item ? collectionIdsForPhrase_(item.id) : []);
     return '<section class="panel form-panel"><div class="section-head"><h2 class="section-title">' + (item ? 'Editar ' + esc(item.id) : 'Nueva frase') + '</h2></div>' +
-      '<div class="field"><label for="f-de">Frase en ' + esc(targetName_()) + '</label><textarea id="f-de" lang="' + esc(state.language.locale) + '">' + esc(item ? item.de : '') + '</textarea><div class="ai-actions"><button id="ai-translate-to-es" class="ghost" data-act="translate-to-es">Traducir al español</button></div></div>' +
-      '<div class="field"><label for="f-es">Traducción al español</label><textarea id="f-es">' + esc(item ? item.es : '') + '</textarea><div class="ai-actions"><button id="ai-translate" class="ghost" data-act="translate">Traducir a ' + esc(targetName_()) + '</button></div></div>' +
+      '<div class="field"><label for="f-de">Frase en ' + esc(targetName_()) + '</label><textarea id="f-de" lang="' + esc(state.language.locale) + '">' + esc(item ? item.de : '') + '</textarea><div class="ai-actions"><button id="ai-translate-to-es" class="ghost" data-act="translate-to-es">Traducir a ' + esc(translationName_()) + '</button></div></div>' +
+      '<div class="field"><label for="f-es">Traducción a ' + esc(translationName_()) + '</label><textarea id="f-es" lang="' + esc(state.language.translation.locale) + '">' + esc(item ? item.es : '') + '</textarea><div class="ai-actions"><button id="ai-translate" class="ghost" data-act="translate">Traducir a ' + esc(targetName_()) + '</button></div></div>' +
+      pronunciationFieldsHtml_(item, null, '') +
       '<div class="field"><label for="f-notes">Notas</label><input id="f-notes" type="text" value="' + esc(item ? item.notes : '') + '"></div>' +
       '<div class="field"><label for="f-tags">Etiquetas</label><input id="f-tags" type="text" value="' + esc(item ? item.tags.join(', ') : '') + '" placeholder="viaje, trabajo, A2"></div>' +
       (inCollection ? '<p class="hint">Se agregará a ' + esc(collectionById_(collectionId).name) + '.</p>' : phraseCollectionPickerHtml_(selectedIds)) +
@@ -827,13 +865,13 @@
       for (var i = 0; i < preview.data.columnCount; i++) cells += '<td>' + esc(row[i] || '') + '</td>';
       return '<tr>' + cells + '</tr>';
     }).join('') : '';
-    return '<section class="panel import-panel"><h2 class="section-title">Importar CSV / TSV</h2><p class="hint">Pegá el contenido, elegí el separador y mapeá ' + esc(targetName_()) + ' y español.</p>' +
-      '<textarea id="import-text" placeholder="' + esc(targetName_()) + ',Español\nFrase,Traducción">' + esc(state.importText) + '</textarea><div class="import-options">' +
+    return '<section class="panel import-panel"><h2 class="section-title">Importar CSV / TSV</h2><p class="hint">Pegá el contenido, elegí el separador y mapeá ' + esc(targetName_()) + ' y ' + esc(translationName_()) + '. Las ayudas son opcionales.</p>' +
+      '<textarea id="import-text" placeholder="' + esc(targetName_()) + ',' + esc(translationName_()) + '\nFrase,Traducción">' + esc(state.importText) + '</textarea><div class="import-options">' +
       '<label><input type="radio" name="delimiter" value=","' + (state.importDelimiter === ',' ? ' checked' : '') + '> Coma</label>' +
       '<label><input type="radio" name="delimiter" value="tab"' + (state.importDelimiter === '\t' ? ' checked' : '') + '> Tab</label>' +
       '<label><input id="import-header" type="checkbox"' + (state.importHasHeader ? ' checked' : '') + '> Primera fila: encabezados</label></div><button class="ghost" data-act="preview-import">Ver vista previa</button>' +
       (preview ? '<div class="preview"><div class="mapping"><div><label for="import-de">Columna en ' + esc(targetName_()) + '</label><select id="import-de">' + optionHtml(preview.data.columnCount) + '</select></div>' +
-        '<div><label for="import-es">Columna española</label><select id="import-es">' + optionHtml(preview.data.columnCount) + '</select></div></div><table><tbody>' + rows + '</tbody></table>' +
+        '<div><label for="import-es">Columna en ' + esc(translationName_()) + '</label><select id="import-es">' + optionHtml(preview.data.columnCount) + '</select></div><div><label for="import-pronunciation">Pronunciación (opcional)</label><select id="import-pronunciation"><option value="-1">Sin columna</option>' + optionHtml(preview.data.columnCount) + '</select></div><div><label for="import-kana">Lectura en kana (opcional)</label><select id="import-kana"><option value="-1">Sin columna</option>' + optionHtml(preview.data.columnCount) + '</select></div></div><table><tbody>' + rows + '</tbody></table>' +
         '<div class="form-actions" style="margin-top:12px"><button class="primary" data-act="import">Importar</button></div></div>' : '') + '</section>';
   }
 
@@ -843,7 +881,7 @@
     var page = paginate(items, state.managePage);
     state.managePage = page.page;
     return page.items.map(function (item) {
-      return '<article class="manage-item"><h3 lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</h3><p>' + esc(item.es || 'Sin traducción') + '</p>' +
+      return '<article class="manage-item"><h3 lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</h3>' + pronunciationHtml_(item) + '<p lang="' + esc(state.language.translation.locale) + '">' + esc(item.es || 'Sin traducción') + '</p>' +
         (item.notes ? '<p class="hint">' + esc(item.notes) + '</p>' : '') + '<div class="manage-meta">' +
         item.tags.map(function (tag) { return '<span class="tag">#' + esc(tag) + '</span>'; }).join('') +
         '<label class="print-status"><input type="checkbox" data-print-status data-id="' + esc(item.id) + '"' + (item.printedAt ? ' checked' : '') + '> Incluida en material</label>' +
@@ -858,7 +896,7 @@
   }
 
   function renderManage() {
-    el.screen.innerHTML = '<div class="manage-grid"><section><div class="section-head"><h1 class="section-title">Gestionar frases</h1><button class="ghost" data-act="copy">Copiar ' + esc(targetName_()) + ' al azar</button></div>' +
+    el.screen.innerHTML = '<div class="manage-grid"><section><div class="section-head"><h1 class="section-title">Gestionar frases</h1>' + pronunciationToggleHtml_() + '<button class="ghost" data-act="copy">Copiar ' + esc(targetName_()) + ' al azar</button></div>' +
       '<input id="manage-search" type="search" placeholder="Buscar frases…" value="' + esc(state.manageQuery) + '"><div class="card manage-list" id="manage-list">' + manageListHtml() + '</div></section>' +
       '<aside class="manage-side">' + editorHtml() + importHtml() + '</aside></div>';
   }
@@ -895,7 +933,7 @@
   }
 
   function printCollectionOptionsHtml_() {
-    var disabled = state.printGenerating ? ' disabled' : '';
+    var disabled = (state.printGenerating || state.printPreviewSaving) ? ' disabled' : '';
     var options = printableCollections_().map(function (collection) {
       return '<label class="print-collection-row"><input type="checkbox" data-print-collection value="' + esc(collection.id) + '"' + disabled +
         (printCollectionSelected_(collection.id) ? ' checked' : '') + '><span>' + esc(collection.name) + '</span><span class="muted">' + collection.count + '</span></label>';
@@ -904,7 +942,7 @@
   }
 
   function printOrderHtml_() {
-    var disabled = state.printGenerating ? ' disabled' : '';
+    var disabled = (state.printGenerating || state.printPreviewSaving) ? ' disabled' : '';
     return state.printCollectionIds.map(function (id, index) {
       var collection = collectionById_(id);
       if (!collection && collectionKey_(id) === collectionKey_('__unassigned__')) collection = { name:'Sin colección' };
@@ -929,7 +967,96 @@
   function printPreviewHtml_() {
     if (state.printFormat !== 'html') return '';
     if (!state.printPreview) return '<div class="print-summary">Previsualizá el material para editarlo antes de descargarlo.</div>';
-    return '<div class="print-preview"><div class="section-head"><h2 class="section-title">Vista previa editable</h2><span class="hint">Hacé clic en el texto o las celdas para corregirlo.</span></div><div id="print-preview-content" class="print-preview-content" contenteditable="' + (state.printGenerating ? 'false' : 'true') + '" spellcheck="false" style="--material-size:' + state.printFontSize + 'px;--material-leading:' + state.printLineHeight + '">' + state.printPreview.body + '</div></div>';
+    var body = document.createElement('div');
+    body.innerHTML = state.printPreview.body;
+    body.querySelectorAll('td[data-print-pronunciation]').forEach(function (cell) { cell.contentEditable = 'false'; });
+    body.querySelectorAll('[data-pronunciation-field]').forEach(function (field) {
+      field.contentEditable = state.printGenerating || state.printPreviewSaving ? 'false' : 'true';
+      field.tabIndex = 0;
+    });
+    var aids = !!body.querySelector('[data-pronunciation-field]');
+    return '<div class="print-preview"><div class="section-head"><h2 class="section-title">Vista previa editable</h2><span class="hint">Hacé clic en el texto o las celdas para corregirlo.</span></div>' +
+      (aids ? '<p class="hint">Guardá la pronunciación para actualizar las frases y dejarlas pendientes de incluir en material. Los demás cambios sólo afectan el archivo.</p><button class="ghost" data-act="save-print-pronunciation"' + (state.printPreviewSaving || state.printGenerating || state.printPreviewLoading ? ' disabled' : '') + '>' + (state.printPreviewSaving ? 'Guardando…' : 'Guardar pronunciación') + '</button>' : '') +
+      '<div id="print-preview-content" class="print-preview-content" contenteditable="' + (state.printGenerating || state.printPreviewSaving ? 'false' : 'true') + '" spellcheck="false" style="--material-size:' + state.printFontSize + 'px;--material-leading:' + state.printLineHeight + '">' + body.innerHTML + '</div></div>';
+  }
+
+  function printPronunciationEdits_() {
+    if (!state.printPreview) return [];
+    var phrases = {}, edits = {};
+    (state.printPreview.phrases || []).forEach(function (item) { phrases[item.id] = item; });
+    var body = document.createElement('div');
+    body.innerHTML = state.printPreview.body;
+    body.querySelectorAll('[data-pronunciation-field]').forEach(function (field) {
+      var id = field.dataset.phraseId, name = field.dataset.pronunciationField;
+      var item = phrases[id];
+      if (!item || (name !== 'kana' && name !== 'pronunciation')) return;
+      field.querySelectorAll('br').forEach(function (node) { node.replaceWith('\n'); });
+      field.querySelectorAll('div,p').forEach(function (node) { node.append('\n'); });
+      var value = field.textContent.trim();
+      if (value === item[name]) return;
+      var edit = edits[id] || (edits[id] = {});
+      if (Object.prototype.hasOwnProperty.call(edit, name) && edit[name] !== value) {
+        throw new Error('La frase ' + id + ' tiene pronunciaciones distintas entre colecciones. Igualalas antes de guardar.');
+      }
+      edit[name] = value;
+    });
+    return Object.keys(edits).map(function (id) {
+      var item = phrases[id];
+      return Object.assign({id:id, pronunciation:item.pronunciation, kana:item.kana, expectedUpdated:item.updated}, edits[id]);
+    });
+  }
+
+  function mergePrintPronunciations_(editedBody, savedBody) {
+    var edited = document.createElement('div'), saved = document.createElement('div'), rows = {};
+    edited.innerHTML = editedBody;
+    saved.innerHTML = savedBody;
+    saved.querySelectorAll('tr[data-phrase-id]').forEach(function (row) { rows[row.dataset.phraseId] = row; });
+    edited.querySelectorAll('tr[data-phrase-id]').forEach(function (row) {
+      var previous = row.querySelector('[data-print-pronunciation]');
+      var current = rows[row.dataset.phraseId] && rows[row.dataset.phraseId].querySelector('[data-print-pronunciation]');
+      if (previous && current) previous.replaceWith(current.cloneNode(true));
+      else if (previous) previous.remove();
+    });
+    if (!saved.querySelector('th[data-print-pronunciation]')) {
+      edited.querySelectorAll('th[data-print-pronunciation]').forEach(function (node) { node.remove(); });
+    }
+    return edited.innerHTML;
+  }
+
+  function savePrintPronunciation_() {
+    if (!state.printPreview || state.printPreviewSaving || state.printGenerating || state.printPreviewLoading || state.loadingData) return;
+    capturePrintPreview_();
+    var edits;
+    try { edits = printPronunciationEdits_(); } catch (err) { return say(err.message, 'err'); }
+    if (!edits.length) return say('No hay cambios de pronunciación para guardar.');
+    var preview = state.printPreview, revision = state.printRevision;
+    var payload = printPayload_();
+    payload.edits = edits;
+    state.printPreviewSaving = true;
+    state.languageBusy++;
+    clearPrintDownload_();
+    renderPrint();
+    google.script.run.withSuccessHandler(function (result) {
+      state.printPreviewSaving = false;
+      state.languageBusy--;
+      result.items.forEach(function (item) {
+        var existing = byId(item.id);
+        if (existing) Object.assign(existing, item);
+      });
+      decorateCollections_();
+      if (revision === state.printRevision && preview === state.printPreview) {
+        preview.body = mergePrintPronunciations_(preview.body, result.body);
+        preview.signature = result.signature;
+        preview.phrases = result.phrases;
+      }
+      if (state.view === 'print') renderPrint();
+      say('Pronunciación guardada. Las frases modificadas quedaron pendientes de incluir en material.');
+    }).withFailureHandler(function (err) {
+      state.printPreviewSaving = false;
+      state.languageBusy--;
+      if (state.view === 'print') renderPrint();
+      say(err.message, 'err');
+    }).saveMaterialPronunciations(payload);
   }
 
   function clearPrintDownload_() {
@@ -951,7 +1078,7 @@
     var result = state.printResult;
     var estimate = printEstimate_();
     var buttonLabel = state.printGenerating ? 'Generando material…' : (state.printFormat === 'html' ? 'Descargar HTML' : 'Descargar Markdown');
-    var disabled = state.printGenerating ? ' disabled' : '';
+    var disabled = (state.printGenerating || state.printPreviewSaving) ? ' disabled' : '';
     el.screen.innerHTML = '<div class="print-grid"><section class="panel print-panel"><div class="section-head"><h1 class="section-title">Material de estudio</h1></div>' +
       '<p class="hint">HTML mantiene el tamaño de letra y la tabla al abrirlo en el ebook o al imprimirlo. También podés editar la vista previa.</p>' +
       '<div class="field"><label>Qué incluir</label><div class="print-options">' +
@@ -962,27 +1089,27 @@
       '<label class="print-option"><input id="print-only-unprinted" type="checkbox"' + disabled + (state.printOnlyUnprinted ? ' checked' : '') + '> Sólo frases no incluidas en material</label>' +
       '<div class="field" style="margin-top:18px"><label>Formato</label><div class="print-options"><label class="print-option"><input type="radio" name="print-format" value="html"' + disabled + (state.printFormat === 'html' ? ' checked' : '') + '> HTML editable (recomendado)</label><label class="print-option"><input type="radio" name="print-format" value="markdown"' + disabled + (state.printFormat === 'markdown' ? ' checked' : '') + '> Markdown</label></div></div>' +
       (state.printFormat === 'html' ? '<div class="print-settings"><div class="field"><label for="print-font-size">Tamaño de letra</label><select id="print-font-size"' + disabled + '><option value="18"' + (state.printFontSize === 18 ? ' selected' : '') + '>18 px</option><option value="20"' + (state.printFontSize === 20 ? ' selected' : '') + '>20 px</option><option value="22"' + (state.printFontSize === 22 ? ' selected' : '') + '>22 px</option><option value="24"' + (state.printFontSize === 24 ? ' selected' : '') + '>24 px</option></select></div><div class="field"><label for="print-line-height">Espaciado</label><select id="print-line-height"' + disabled + '><option value="1.4"' + (state.printLineHeight === 1.4 ? ' selected' : '') + '>Compacto</option><option value="1.6"' + (state.printLineHeight === 1.6 ? ' selected' : '') + '>Cómodo</option><option value="1.8"' + (state.printLineHeight === 1.8 ? ' selected' : '') + '>Amplio</option><option value="2"' + (state.printLineHeight === 2 ? ' selected' : '') + '>Muy amplio</option></select></div></div>' : '') +
-      printSummaryHtml_() + '<div class="print-actions"><button class="ghost" data-act="preview-material"' + (state.printPreviewLoading || state.printGenerating || !estimate.unique ? ' disabled' : '') + '>' + (state.printPreviewLoading ? 'Preparando vista previa…' : 'Previsualizar') + '</button><button class="primary" data-act="generate-material"' + (state.printGenerating || !estimate.unique ? ' disabled' : '') + '>' + buttonLabel + '</button></div>' +
+      printSummaryHtml_() + '<div class="print-actions"><button class="ghost" data-act="preview-material"' + (state.printPreviewLoading || state.printGenerating || state.printPreviewSaving || !estimate.unique ? ' disabled' : '') + '>' + (state.printPreviewLoading ? 'Preparando vista previa…' : 'Previsualizar') + '</button><button class="primary" data-act="generate-material"' + (state.printGenerating || state.printPreviewSaving || state.printPreviewLoading || !estimate.unique ? ' disabled' : '') + '>' + buttonLabel + '</button></div>' +
       (result ? '<div class="print-result">Material descargado: ' + result.includedCount + ' frases distintas' + (result.rowCount !== result.includedCount ? ' · ' + result.rowCount + ' filas' : '') + '.<br><a href="' + esc(result.url) + '" download="' + esc(result.name) + '">Volver a descargar ' + esc(result.name) + '</a></div>' : '') +
-      printPreviewHtml_() + '</section><aside class="panel print-panel"><h2 class="section-title">Cómo funciona</h2><p class="hint">Cada colección aparece en su propio bloque con una tabla de dos columnas. Las frases sin traducción quedan con la celda española vacía.</p><p class="hint">Al descargarlo, las frases incluidas quedan marcadas con la fecha de generación. Podés corregir esa marca desde Gestionar.</p></aside></div>';
+      printPreviewHtml_() + '</section><aside class="panel print-panel"><h2 class="section-title">Cómo funciona</h2><p class="hint">Cada colección aparece en su propio bloque: objetivo, pronunciación y traducción. Si no hay ayudas, la tabla tendrá dos columnas. Las celdas faltantes quedan vacías.</p><p class="hint">Al descargarlo, las frases incluidas quedan marcadas con la fecha de generación. Podés corregir esa marca desde Gestionar.</p></aside></div>';
   }
 
   function selectAllPrintCollections_() {
-    if (state.printGenerating) return;
+    if (state.printGenerating || state.printPreviewSaving) return;
     state.printCollectionIds = printableCollections_().map(function (collection) { return collection.id; });
     clearPrintResult_();
     renderPrint();
   }
 
   function clearPrintCollections_() {
-    if (state.printGenerating) return;
+    if (state.printGenerating || state.printPreviewSaving) return;
     state.printCollectionIds = [];
     clearPrintResult_();
     renderPrint();
   }
 
   function movePrintCollection_(index, direction) {
-    if (state.printGenerating) return;
+    if (state.printGenerating || state.printPreviewSaving) return;
     var next = index + direction;
     if (index < 0 || next < 0 || next >= state.printCollectionIds.length) return;
     var moved = state.printCollectionIds[index];
@@ -1025,7 +1152,7 @@
 
   function previewPrintMaterial_() {
     var estimate = printEstimate_();
-    if (!estimate.unique || state.printGenerating || state.printPreviewLoading) return;
+    if (!estimate.unique || state.printGenerating || state.printPreviewLoading || state.printPreviewSaving) return;
     clearPrintDownload_();
     var revision = state.printRevision;
     state.printPreviewLoading = true;
@@ -1033,7 +1160,7 @@
     google.script.run.withSuccessHandler(function (result) {
       if (revision !== state.printRevision) return;
       state.printPreviewLoading = false;
-      state.printPreview = {body:result.body, includedCount:result.includedCount, rowCount:result.rowCount, name:result.name, signature:result.signature};
+      state.printPreview = {body:result.body, includedCount:result.includedCount, rowCount:result.rowCount, name:result.name, signature:result.signature, phrases:result.phrases || []};
       render();
     }).withFailureHandler(function (err) {
       if (revision !== state.printRevision) return;
@@ -1052,8 +1179,11 @@
 
   function generatePrintMaterial_() {
     var estimate = printEstimate_();
-    if (!estimate.unique || state.printGenerating) return;
+    if (!estimate.unique || state.printGenerating || state.printPreviewSaving || state.printPreviewLoading) return;
     capturePrintPreview_();
+    try {
+      if (printPronunciationEdits_().length) return say('Guardá la pronunciación editada antes de descargar el material.', 'err');
+    } catch (err) { return say(err.message, 'err'); }
     var format = state.printFormat;
     var editedBody = format === 'html' && state.printPreview ? state.printPreview.body : null;
     var payload = printPayload_();
@@ -1077,7 +1207,7 @@
       link.click();
       link.remove();
       state.printGenerating = false;
-      state.printPreview = format === 'html' && revision === state.printRevision ? {body:useEditedBody ? editedBody : result.body, includedCount:result.includedCount, rowCount:result.rowCount, name:result.name, signature:result.signature} : null;
+      state.printPreview = format === 'html' && revision === state.printRevision ? {body:useEditedBody ? editedBody : result.body, includedCount:result.includedCount, rowCount:result.rowCount, name:result.name, signature:result.signature, phrases:result.phrases || []} : null;
       state.printResult = {url:url, name:result.name, includedCount:result.includedCount, rowCount:result.rowCount, markedAt:result.markedAt};
       render();
       reload(function () {
@@ -1124,8 +1254,8 @@
     var german = germanVisible_(index);
     var spanish = state.session.supports.spanish;
     var text = '';
-    if (german) text += '<span class="session-row-de" lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</span>';
-    if (spanish) text += '<span class="session-row-es">' + esc(item.es || 'Sin traducción') + '</span>';
+    if (german) text += '<span class="session-row-de" lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</span>' + pronunciationHtml_(item);
+    if (spanish) text += '<span class="session-row-es" lang="' + esc(state.language.translation.locale) + '">' + esc(item.es || 'Sin traducción') + '</span>';
     if (!text) text = '<span class="session-row-meta">Frase ' + (index + 1) + '</span>';
     var action = '';
     if (current && recallPhase_() && !german) {
@@ -1169,7 +1299,7 @@
     playerVoiceReady_();
     return '<section class="collection-player"><div class="section-head"><button class="link" data-act="collection-back">← Colecciones</button>' +
       (collection.collection.unassigned || collection.collection.all ? '' : '<span><button class="link" data-act="new-collection-phrase">Nueva frase</button><button class="link" data-act="edit-collection">Editar colección</button></span>') + '</div><h1 class="section-title">' + esc(collection.collection.name) + '</h1>' +
-      '<div class="session-layout">' + sessionControlsHtml_() + '<section class="card session-list"><div class="session-list-head"><div><h2 class="section-title">Frases</h2><span class="muted">' + sessionItems_().length + ' frases' + (recallPhase_() ? ' · Decí la respuesta antes de revelar.' : '') + '</span></div><div class="session-language-actions"><button class="ghost" id="support-german" data-act="toggle-support" data-support="german"></button><button class="ghost" id="support-spanish" data-act="toggle-support" data-support="spanish"></button></div></div><div id="session-list">' + sessionListHtml_() + '</div>' + paginationHtml('collection', sessionPage_()) + '</section></div></section>';
+      '<div class="session-layout">' + sessionControlsHtml_() + '<section class="card session-list"><div class="session-list-head"><div><h2 class="section-title">Frases</h2><span class="muted">' + sessionItems_().length + ' frases' + (recallPhase_() ? ' · Decí la respuesta antes de revelar.' : '') + '</span></div><div class="session-language-actions"><button class="ghost" id="support-german" data-act="toggle-support" data-support="german"></button><button class="ghost" id="support-spanish" data-act="toggle-support" data-support="spanish"></button>' + pronunciationToggleHtml_() + '</div></div><div id="session-list">' + sessionListHtml_() + '</div>' + paginationHtml('collection', sessionPage_()) + '</section></div></section>';
   }
 
   function collectionCandidates_() {
@@ -1193,14 +1323,14 @@
     state.collectionEditorPage = memberPage.page;
     var members = memberPage.items.map(function (item, index) {
       index += (memberPage.page - 1) * PAGE_SIZE;
-      return '<div class="collection-row"><div><strong lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</strong><p>' + esc(item.es) + '</p></div><div class="collection-row-actions"><button class="link" data-act="move-collection-phrase" data-id="' + esc(item.id) + '" data-direction="-1"' + (index === 0 ? ' disabled' : '') + '>↑</button><button class="link" data-act="move-collection-phrase" data-id="' + esc(item.id) + '" data-direction="1"' + (index === collection.items.length - 1 ? ' disabled' : '') + '>↓</button><button class="link danger" data-act="remove-collection-phrase" data-id="' + esc(item.id) + '">Quitar</button></div></div>';
+      return '<div class="collection-row"><div><strong lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</strong>' + pronunciationHtml_(item) + '<p lang="' + esc(state.language.translation.locale) + '">' + esc(item.es) + '</p></div><div class="collection-row-actions"><button class="link" data-act="move-collection-phrase" data-id="' + esc(item.id) + '" data-direction="-1"' + (index === 0 ? ' disabled' : '') + '>↑</button><button class="link" data-act="move-collection-phrase" data-id="' + esc(item.id) + '" data-direction="1"' + (index === collection.items.length - 1 ? ' disabled' : '') + '>↓</button><button class="link danger" data-act="remove-collection-phrase" data-id="' + esc(item.id) + '">Quitar</button></div></div>';
     }).join('') || '<div class="empty">Todavía no agregaste frases.</div>';
     var candidatePage = paginate(collectionCandidates_(), state.collectionCandidatePage);
     state.collectionCandidatePage = candidatePage.page;
     var selectedCount = selectedCollectionCandidateIds_().length;
     var candidates = candidatePage.items.map(function (item) {
       var selected = !!state.collectionSelection[item.id];
-      return '<label class="collection-row"><input type="checkbox" data-collection-candidate value="' + esc(item.id) + '"' + (selected ? ' checked' : '') + '><div><strong lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</strong><p>' + esc(item.es) + '</p></div></label>';
+      return '<label class="collection-row"><input type="checkbox" data-collection-candidate value="' + esc(item.id) + '"' + (selected ? ' checked' : '') + '><div><strong lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</strong>' + pronunciationHtml_(item) + '<p lang="' + esc(state.language.translation.locale) + '">' + esc(item.es) + '</p></div></label>';
     }).join('') || '<div class="empty">No hay frases para agregar.</div>';
     return '<section><div class="section-head"><h1 class="section-title">Editar colección</h1><button class="link danger" data-act="delete-collection">Borrar colección</button></div><div class="field" style="max-width:620px"><label for="collection-name">Nombre</label><input id="collection-name" type="text" value="' + esc(collection.collection.name) + '"></div><div class="form-actions" style="justify-content:flex-start; margin-bottom:20px"><button class="primary" data-act="save-collection">Guardar nombre</button><button class="ghost" data-act="cancel-collection-editor">Volver al reproductor</button></div><div class="collection-editor"><section class="card collection-members"><div class="section-head" style="padding:14px 14px 0"><h2 class="section-title">Frases de la colección</h2><span class="muted">' + collection.items.length + '</span></div>' + members + paginationHtml('collection-editor', memberPage) + '</section><section><div class="section-head"><h2 class="section-title">Agregar frases</h2><button class="ghost" data-act="new-collection-phrase">Nueva frase</button></div><input id="collection-phrase-search" type="search" placeholder="Buscar frases…" value="' + esc(state.collectionPhraseQuery) + '"><div class="card collection-candidates" style="margin-top:12px">' + candidates + paginationHtml('collection-candidates', candidatePage) + '</div><div class="form-actions" style="justify-content:flex-start; margin-top:12px"><button class="primary" data-act="add-selected-collection-phrases"' + (selectedCount ? '' : ' disabled') + '>Agregar seleccionadas (' + selectedCount + ')</button></div></section></div></section>';
   }
@@ -1215,7 +1345,8 @@
   function renderGenerator() {
     var focusedId = document.activeElement && document.activeElement.id;
     var draft = state.generator;
-    var disabled = draft.busy ? ' disabled' : '';
+    var suggesting = draft.items.some(function (item) { return item.pronunciationBusy; });
+    var disabled = draft.busy || suggesting ? ' disabled' : '';
     var selected = draft.items.filter(function (item) { return item.selected && !item.saved; }).length;
     var collections = state.collections.filter(function (collection) { return !collection.unassigned; });
     draft.collectionIds = draft.collectionIds.filter(function (id) { return !!collectionById_(id); });
@@ -1226,15 +1357,16 @@
         (draft.collectionIds.indexOf(collection.id) !== -1 ? ' checked' : '') + disabled + '> ' + esc(collection.name) + '</label>';
     }).join('');
     var rows = draft.items.map(function (item, index) {
-      var locked = draft.busy || item.saved ? ' disabled' : '';
+      var locked = draft.busy || item.saved || item.pronunciationBusy ? ' disabled' : '';
       return '<article class="panel" style="margin-top:12px"><label><input type="checkbox" id="generator-select-' + index + '" data-generator-select="' + index + '"' +
         (item.selected ? ' checked' : '') + locked + '> Frase ' + (index + 1) + '</label>' +
         (item.saved ? '<p role="status">' + (item.reused ? 'Agregada usando la frase existente; se conservó su traducción y progreso.' : 'Agregada.') + '</p>' : '') +
         '<div class="field"><label for="generated-de-' + index + '">' + esc(targetName_()) + '</label><textarea id="generated-de-' + index + '" lang="' + esc(state.language.locale) + '" data-generator-field="de" data-index="' + index + '"' + locked + '>' + esc(item.de) + '</textarea></div>' +
-        '<div class="field"><label for="generated-es-' + index + '">Español</label><textarea id="generated-es-' + index + '" data-generator-field="es" data-index="' + index + '"' + locked + '>' + esc(item.es) + '</textarea></div></article>';
+        pronunciationFieldsHtml_(item, index, locked) +
+        '<div class="field"><label for="generated-es-' + index + '">' + esc(translationName_()) + '</label><textarea id="generated-es-' + index + '" lang="' + esc(state.language.translation.locale) + '" data-generator-field="es" data-index="' + index + '"' + locked + '>' + esc(item.es) + '</textarea></div></article>';
     }).join('');
     el.screen.innerHTML = '<section style="max-width:800px;margin:auto"><h1 class="section-title">Generar frases</h1>' +
-      '<p class="hint">10 frases en ' + esc(targetName_()) + ' con traducción natural al español. Revisalas antes de agregarlas.</p>' +
+      '<p class="hint">10 frases en ' + esc(targetName_()) + ' con traducción natural a ' + esc(translationName_()) + '. Revisalas antes de agregarlas.</p>' +
       '<div class="field"><label for="generator-context">Situación o temática</label><textarea id="generator-context" placeholder="Por ejemplo: pedir ayuda con un bug"' + disabled + '>' + esc(draft.context) + '</textarea></div>' +
       '<div class="field"><label for="generator-level">Nivel de la próxima tanda</label><select id="generator-level"' + disabled + '><option value="intermediate"' + (draft.level === 'intermediate' ? ' selected' : '') + '>Intermedio (B1–B2)</option><option value="advanced"' + (draft.level === 'advanced' ? ' selected' : '') + '>Avanzado (C1–C2)</option></select></div>' +
       '<button class="primary" data-act="generate-phrases"' + disabled + '>' + (draft.items.length ? 'Generar otra tanda' : 'Generar frases') + '</button>' +
@@ -1243,7 +1375,7 @@
       (draft.items.length ? '<div class="panel"><h2 class="section-title">Colecciones de destino</h2><p class="hint">Tanda generada: ' + (draft.generatedLevel === 'advanced' ? 'Avanzado (C1–C2)' : 'Intermedio (B1–B2)') + '. Elegir colecciones es opcional; las frases nuevas sin destino quedan en “Sin colección”.</p>' +
         (destinations ? '<div class="collection-picker">' + destinations + '</div>' : '<p class="hint">No hay colecciones disponibles para elegir.</p>') +
         '<div class="form-actions"><button class="ghost" data-act="generator-select-all"' + disabled + '>Seleccionar todas</button><button class="ghost" data-act="generator-select-none"' + disabled + '>Deseleccionar todas</button>' +
-        '<button class="primary" data-act="save-generated"' + (draft.busy || !selected ? ' disabled' : '') + '>Agregar seleccionadas (' + selected + ')</button></div>' +
+        '<button class="primary" data-act="save-generated"' + (draft.busy || suggesting || !selected ? ' disabled' : '') + '>Agregar seleccionadas (' + selected + ')</button></div>' +
         (addHint ? '<p class="hint" role="status" aria-live="polite">' + addHint + '</p>' : '') + '</div>' + rows : '') + '</section>';
     var focused = focusedId && document.getElementById(focusedId);
     if (focused && !focused.disabled) focused.focus();
@@ -1251,36 +1383,47 @@
 
   function generatePhrases_() {
     var draft = state.generator;
-    if (draft.busy) return;
+    if (draft.busy || draft.items.some(function (item) { return item.pronunciationBusy; })) return;
     if (!draft.context.trim()) return say('Escribí una situación o temática.', 'err');
     if (draft.items.some(function (item) { return !item.saved; }) && !confirm('¿Descartar los borradores sin guardar cuando esté lista la nueva tanda?')) return;
     var level = draft.level;
+    var languageVersion = state.language.version;
     draft.debug = '';
     draft.busy = true;
     renderGenerator();
     google.script.run.withSuccessHandler(function (items) {
-      draft.items = items.map(function (item) { return { de:item.de, es:item.es, selected:false, saved:false }; });
+      draft.busy = false;
+      if (languageVersion !== state.language.version) {
+        if (state.view === 'generate') renderGenerator();
+        return say('El idioma cambió. Generá una nueva tanda.', 'err');
+      }
+      draft.generatedLanguageVersion = languageVersion;
+      draft.items = items.map(function (item) { return { de:item.de, es:item.es, pronunciation:'', kana:'', selected:false, saved:false }; });
       draft.generatedLevel = level;
       draft.debug = '';
-      draft.busy = false;
       if (state.view === 'generate') renderGenerator();
       say('10 frases listas para revisar.');
     }).withFailureHandler(function (err) {
       draft.busy = false;
+      if (languageVersion !== state.language.version) {
+        if (state.view === 'generate') renderGenerator();
+        return;
+      }
       var parts = String(err.message || '').split('\n\nRespuesta de Gemini:\n');
       draft.debug = parts.length > 1 ? parts.slice(1).join('\n\nRespuesta de Gemini:\n') : '';
       if (state.view === 'generate') renderGenerator();
       say(parts[0], 'err');
-    }).generatePhrases(draft.context, level, state.language.version);
+    }).generatePhrases(draft.context, level, languageVersion);
   }
 
   function saveGeneratedPhrases_() {
     var draft = state.generator;
-    if (draft.busy) return;
+    if (draft.busy || draft.items.some(function (item) { return item.pronunciationBusy; })) return;
     if (state.loadingData) return say('Esperá a que termine la actualización antes de guardar.', 'err');
+    if (Number.isInteger(draft.generatedLanguageVersion) && draft.generatedLanguageVersion !== state.language.version) return say('El idioma cambió. Generá una nueva tanda.', 'err');
     var selected = draft.items.filter(function (item) { return item.selected && !item.saved; });
     if (!selected.length) return say('Elegí al menos una frase.', 'err');
-    if (selected.some(function (item) { return !item.de.trim() || !item.es.trim(); })) return say('Completá ' + targetName_() + ' y español de las frases seleccionadas.', 'err');
+    if (selected.some(function (item) { return !item.de.trim() || !item.es.trim(); })) return say('Completá ' + targetName_() + ' y ' + translationName_() + ' de las frases seleccionadas.', 'err');
     draft.busy = true;
     draft.saving = true;
     renderGenerator();
@@ -1294,6 +1437,8 @@
         selected[index].reused = result.reused;
         selected[index].de = result.item.de;
         selected[index].es = result.item.es;
+        selected[index].pronunciation = result.item.pronunciation;
+        selected[index].kana = result.item.kana;
       });
       draft.busy = false;
       draft.saving = false;
@@ -1307,7 +1452,7 @@
       draft.saving = false;
       if (state.view === 'generate') renderGenerator();
       say(err.message, 'err');
-    }).saveGeneratedPhrases({ items:selected.map(function (item) { return { de:item.de, es:item.es }; }), collectionIds:draft.collectionIds.slice(), expectedLanguageVersion:state.language.version });
+    }).saveGeneratedPhrases({ items:selected.map(function (item) { return { de:item.de, es:item.es, pronunciation:item.pronunciation || '', kana:item.kana || '' }; }), collectionIds:draft.collectionIds.slice(), expectedLanguageVersion:state.language.version });
   }
 
   function renderEtymology() {
@@ -1322,20 +1467,25 @@
   function renderSettings() {
     if (state.setup === 'sheet') {
       el.screen.innerHTML = '<section class="panel form-panel" style="max-width:640px;margin:auto"><h1 class="section-title">Vincular la planilla</h1>' +
-        '<p>Abrí esta app una vez desde el menú <strong>Frases → Abrir frases</strong> de tu Google Sheet. Después podrás usar también la web app.</p></section>';
+        '<p>Abrí esta app una vez desde el menú <strong>Sprache Lernen App → Abrir app</strong> de tu Google Sheet. Después podrás usar también la web app.</p></section>';
       return;
     }
-    var options = LANGUAGES.map(function (language) {
-      return '<option value="' + language.locale + '"' + (state.languageChoice === language.locale ? ' selected' : '') + '>' + esc(language.name.charAt(0).toUpperCase() + language.name.slice(1)) + '</option>';
-    }).join('');
+    function languageFields(prefix, choice, name, locale, label) {
+      var disabled = state.configSaving ? ' disabled' : '';
+      var options = LANGUAGES.map(function (language) {
+        return '<option value="' + language.locale + '"' + (choice === language.locale ? ' selected' : '') + '>' + esc(language.name) + '</option>';
+      }).join('');
+      return '<div class="field" style="margin-top:16px"><label for="' + prefix + '-choice">' + label + '</label><select id="' + prefix + '-choice"' + disabled + '>' + options +
+        '<option value="other"' + (choice === 'other' ? ' selected' : '') + '>Otro</option></select></div>' +
+        (choice === 'other' ? '<div class="field"><label for="' + prefix + '-name">Nombre del idioma</label><input id="' + prefix + '-name" type="text" maxlength="40" value="' + esc(name) + '"' + disabled + '></div>' +
+          '<div class="field"><label for="' + prefix + '-locale">Código de idioma</label><input id="' + prefix + '-locale" type="text" value="' + esc(locale) + '" placeholder="Por ejemplo: nl-NL"' + disabled + '></div>' : '');
+    }
     el.screen.innerHTML = '<section class="panel form-panel" style="max-width:640px;margin:auto"><h1 class="section-title">' +
-      (state.setup ? 'Configuración inicial' : 'Configuración') + '</h1><p class="hint">Elegí el idioma de las frases. La traducción será al español. Las frases que ya existan no se traducirán.</p>' +
-      '<div class="field" style="margin-top:16px"><label for="language-choice">Idioma objetivo</label><select id="language-choice"' + (state.configSaving ? ' disabled' : '') + '>' + options +
-      '<option value="other"' + (state.languageChoice === 'other' ? ' selected' : '') + '>Otro</option></select></div>' +
-      (state.languageChoice === 'other' ? '<div class="field"><label for="language-name">Nombre del idioma</label><input id="language-name" type="text" maxlength="40" value="' + esc(state.customName) + '" placeholder="Por ejemplo: neerlandés"' + (state.configSaving ? ' disabled' : '') + '></div>' +
-        '<div class="field"><label for="language-locale">Código de voz</label><input id="language-locale" type="text" value="' + esc(state.customLocale) + '" placeholder="Por ejemplo: nl-NL"' + (state.configSaving ? ' disabled' : '') + '><p class="hint">Usá un código de idioma y región, como fr-FR.</p></div>' : '') +
-      (!state.setup && state.items.length ? '<p class="hint">Si cambiás el idioma, las frases guardadas seguirán como están. La voz y las herramientas usarán el nuevo idioma.</p>' : '') +
-      '<div class="form-actions" style="justify-content:flex-start"><button class="primary" data-act="save-language"' + (state.configSaving ? ' disabled' : '') + '>Guardar idioma</button></div></section>';
+      (state.setup ? 'Configuración inicial' : 'Configuración') + '</h1><p class="hint">Elegí el idioma objetivo y el idioma de traducción. La interfaz seguirá en español.</p>' +
+      languageFields('language', state.languageChoice, state.customName, state.customLocale, 'Idioma objetivo') +
+      languageFields('translation', state.translationChoice, state.customTranslationName, state.customTranslationLocale, 'Idioma de traducción') +
+      '<p class="hint">Al cambiar el par, las frases existentes se conservarán. Las herramientas usarán los nuevos idiomas.</p>' +
+      '<div class="form-actions" style="justify-content:flex-start"><button class="primary" data-act="save-language"' + (state.configSaving ? ' disabled' : '') + '>Guardar idiomas</button></div></section>';
   }
 
   function saveLanguageSettings_() {
@@ -1345,28 +1495,31 @@
     if (state.printGenerating || state.printPreviewLoading || state.languageBusy) return say('Esperá a que terminen las operaciones pendientes.', 'err');
     var selected = LANGUAGES.find(function (language) { return language.locale === state.languageChoice; });
     var language = selected || {name:state.customName.trim(), locale:state.customLocale.trim()};
-    if (!language.name || !language.locale) return say('Completá el idioma y su código de voz.', 'err');
-    var changed = language.name !== state.language.name || language.locale !== state.language.locale;
-    if (!state.setup && changed && (state.items.length || state.generator.items.length) &&
-        !confirm('Las frases existentes no se traducirán y los borradores generados se descartarán. ¿Cambiar el idioma objetivo?')) return;
+    var translation = LANGUAGES.find(function (item) { return item.locale === state.translationChoice; }) ||
+      {name:state.customTranslationName.trim(), locale:state.customTranslationLocale.trim()};
+    if (!language.name || !language.locale || !translation.name || !translation.locale) return say('Completá ambos idiomas y sus códigos.', 'err');
+    var changed = language.name !== state.language.name || language.locale !== state.language.locale ||
+      translation.name !== translationName_() || translation.locale !== state.language.translation.locale;
+    if (!state.setup && changed &&
+        !confirm('Se conservarán las frases existentes y las herramientas usarán el nuevo par. Los borradores generados se descartarán. ¿Cambiar los idiomas?')) return;
     state.configSaving = true;
     renderSettings();
     google.script.run.withSuccessHandler(function (savedLanguage) {
       state.configSaving = false;
       state.setup = null;
-      if (changed) { state.generator.items = []; state.generator.generatedLevel = null; state.importPreview = null; }
+      if (changed) { state.etymologyResult = ''; state.generator.items = []; state.generator.generatedLevel = null; state.generator.generatedLanguageVersion = null; state.importPreview = null; }
       languageDraft_(savedLanguage);
       stopPlayer_();
-      reload(function () { render(); say('Idioma guardado.'); });
+      reload(function () { render(); say('Idiomas guardados.'); });
     }).withFailureHandler(function (err) {
       state.configSaving = false;
       renderSettings();
       say(err.message, 'err');
-    }).saveLanguageSettings({name:language.name, locale:language.locale, expectedVersion:state.language.version});
+    }).saveLanguageSettings({name:language.name, locale:language.locale, translation:translation, expectedVersion:state.language.version});
   }
 
   function render() {
-    document.querySelector('.brand').textContent = state.setup ? 'Frases para estudiar' : 'Frases en ' + targetName_();
+    document.querySelector('.brand').textContent = 'Sprache Lernen App';
     document.querySelector('nav').style.display = state.setup ? 'none' : '';
     document.querySelector('[data-act="refresh-data"]').style.display = state.setup ? 'none' : '';
     if (state.setup) return renderSettings();
@@ -1493,11 +1646,14 @@
   }
 
   function savePhrase() {
+    if (state.languageBusy) return say('Esperá a que termine la operación pendiente.', 'err');
     var id = state.editing || '';
     var collectionIds = state.collectionPhraseDraft ? [state.collectionId] : Array.prototype.map.call(
       document.querySelectorAll('input[name="phrase-collection"]:checked'), function (input) { return input.value; }
     );
-    var payload = { id:id, de:document.getElementById('f-de').value, es:document.getElementById('f-es').value, expectedLanguageVersion:state.language.version,
+    var payload = { id:id, de:document.getElementById('f-de').value, es:document.getElementById('f-es').value,
+      pronunciation:document.getElementById('f-pronunciation').value,
+      kana:japanese_() ? document.getElementById('f-kana').value : (id && byId(id) ? byId(id).kana || '' : ''), expectedLanguageVersion:state.language.version,
       notes:document.getElementById('f-notes').value, tags:document.getElementById('f-tags').value,
       expectedUpdated:id && byId(id) ? byId(id).updated : '', expectedCollectionIds:id ? (state.editingCollectionIds || []) : [], collectionIds:collectionIds };
     if (!payload.de.trim()) return say('Escribí la frase en ' + targetName_() + ' antes de guardar.', 'err');
@@ -1520,57 +1676,104 @@
     }).withFailureHandler(function (err) { state.languageBusy--; say(err.message, 'err'); }).savePhrase(payload);
   }
 
+  function originalChanged_(index) {
+    var generated = index != null;
+    var item = generated ? state.generator.items[index] : null;
+    var pronunciation = generated ? item.pronunciation : document.getElementById('f-pronunciation').value;
+    var kanaField = document.getElementById('f-kana');
+    var kana = generated ? item.kana : kanaField && kanaField.value;
+    if (!pronunciation && !kana) return;
+    if (item) item.pronunciationNeedsReview = true;
+    var warning = document.getElementById(generated ? 'generated-pronunciation-warning-' + index : 'f-pronunciation-warning');
+    if (warning) warning.hidden = false;
+  }
+
+  function suggestPronunciation_(button) {
+    var generated = button.dataset.index != null;
+    var index = generated ? Number(button.dataset.index) : null;
+    var item = generated ? state.generator.items[index] : null;
+    if (item && (item.saved || item.pronunciationBusy || state.generator.busy)) return;
+    var source = generated ? null : document.getElementById('f-de');
+    var pronunciationField = generated ? null : document.getElementById('f-pronunciation');
+    var kanaField = generated ? null : document.getElementById('f-kana');
+    var text = generated ? item.de : source.value;
+    if (!text.trim()) return say('Escribí el texto original antes de sugerir la pronunciación.', 'err');
+    var previousPronunciation = generated ? item.pronunciation : pronunciationField.value;
+    var previousKana = generated ? item.kana : kanaField && kanaField.value;
+    var languageVersion = state.language.version;
+    if (item) item.pronunciationBusy = true;
+    button.disabled = true;
+    button.textContent = 'Sugiriendo…';
+    state.languageBusy++;
+    google.script.run.withSuccessHandler(function (result) {
+      state.languageBusy--;
+      if (item) item.pronunciationBusy = false;
+      restoreAiButton(button, 'Sugerir pronunciación con IA');
+      if (languageVersion !== state.language.version) return;
+      var unchanged = generated ? state.generator.items.indexOf(item) !== -1 && item.de === text && item.pronunciation === previousPronunciation && item.kana === previousKana :
+        document.body.contains(button) && source.value === text && pronunciationField.value === previousPronunciation && (kanaField && kanaField.value) === previousKana;
+      if (!unchanged) {
+        if (generated && state.view === 'generate') renderGenerator();
+        return say('El texto o sus ayudas cambiaron. Volvé a sugerir la pronunciación.', 'err');
+      }
+      if (item) {
+        item.pronunciation = result.pronunciation;
+        item.kana = result.kana;
+        item.pronunciationNeedsReview = false;
+        if (state.view === 'generate') renderGenerator();
+      } else {
+        pronunciationField.value = result.pronunciation;
+        if (kanaField) kanaField.value = result.kana;
+        document.getElementById('f-pronunciation-warning').hidden = true;
+      }
+      say('Pronunciación sugerida. Revisala antes de guardar.');
+    }).withFailureHandler(function (err) {
+      state.languageBusy--;
+      if (item) item.pronunciationBusy = false;
+      restoreAiButton(button, 'Sugerir pronunciación con IA');
+      if (generated && state.view === 'generate') renderGenerator();
+      say(err.message, 'err');
+    }).suggestPronunciation(text, languageVersion);
+  }
+
   function restoreAiButton(button, label) {
     if (!document.body.contains(button)) return;
     button.disabled = false;
     button.textContent = label;
   }
 
-  function translateToGerman() {
-    var source = document.getElementById('f-es');
-    var button = document.getElementById('ai-translate');
-    if (!source || !button) return;
-    if (!source.value.trim()) return say('Escribí la frase en español antes de traducir.', 'err');
+  function translatePhrase_(toOriginal) {
+    var source = document.getElementById(toOriginal ? 'f-es' : 'f-de');
+    var target = document.getElementById(toOriginal ? 'f-de' : 'f-es');
+    var button = document.getElementById(toOriginal ? 'ai-translate' : 'ai-translate-to-es');
+    if (!source || !target || !button || button.disabled) return;
+    var from = toOriginal ? translationName_() : targetName_();
+    var to = toOriginal ? targetName_() : translationName_();
+    var text = source.value, previousTarget = target.value, languageVersion = state.language.version;
+    if (!text.trim()) return say('Escribí la frase en ' + from + ' antes de traducir.', 'err');
     button.disabled = true;
     button.textContent = 'Traduciendo…';
     state.languageBusy++;
     google.script.run.withSuccessHandler(function (translation) {
       state.languageBusy--;
-      if (document.body.contains(button)) {
-        var target = document.getElementById('f-de');
-        if (target) target.value = translation;
+      restoreAiButton(button, 'Traducir a ' + to);
+      if (languageVersion !== state.language.version || !document.body.contains(button) ||
+          source.value !== text || target.value !== previousTarget) {
+        return say('El texto o el idioma cambiaron. Volvé a solicitar la traducción.', 'err');
       }
-      restoreAiButton(button, 'Traducir a ' + targetName_());
-      say('Propuesta en ' + targetName_() + ' lista.');
+      target.value = translation;
+      if (toOriginal) originalChanged_();
+      say('Propuesta en ' + to + ' lista.');
     }).withFailureHandler(function (err) {
       state.languageBusy--;
-      restoreAiButton(button, 'Traducir a ' + targetName_());
+      restoreAiButton(button, 'Traducir a ' + to);
       say(err.message, 'err');
-    }).suggestGermanTranslation(source.value, state.language.version);
+    })[toOriginal ? 'suggestGermanTranslation' : 'suggestSpanishTranslation'](text, languageVersion);
   }
 
-  function translateToSpanish() {
-    var source = document.getElementById('f-de');
-    var button = document.getElementById('ai-translate-to-es');
-    if (!source || !button) return;
-    if (!source.value.trim()) return say('Escribí la frase en ' + targetName_() + ' antes de traducir.', 'err');
-    button.disabled = true;
-    button.textContent = 'Traduciendo…';
-    state.languageBusy++;
-    google.script.run.withSuccessHandler(function (translation) {
-      state.languageBusy--;
-      if (document.body.contains(button)) {
-        var target = document.getElementById('f-es');
-        if (target) target.value = translation;
-      }
-      restoreAiButton(button, 'Traducir al español');
-      say('Propuesta en español lista.');
-    }).withFailureHandler(function (err) {
-      state.languageBusy--;
-      restoreAiButton(button, 'Traducir al español');
-      say(err.message, 'err');
-    }).suggestSpanishTranslation(source.value, state.language.version);
-  }
+  function translateToGerman() { translatePhrase_(true); }
+
+  function translateToSpanish() { translatePhrase_(false); }
 
   function showEtymology() {
     var source = document.getElementById('etymology-source');
@@ -1584,18 +1787,23 @@
     button.textContent = 'Analizando…';
     result.hidden = false;
     result.textContent = 'Analizando etimología…';
+    state.languageBusy++;
+    var languageVersion = state.language.version;
     google.script.run.withSuccessHandler(function (text) {
+      state.languageBusy--;
+      if (languageVersion !== state.language.version) return;
       state.etymologyResult = text;
       if (document.body.contains(result)) result.textContent = text;
       restoreAiButton(button, 'Analizar etimología');
     }).withFailureHandler(function (err) {
+      state.languageBusy--;
       if (document.body.contains(result)) {
         result.hidden = true;
         result.textContent = '';
       }
       restoreAiButton(button, 'Analizar etimología');
       say(err.message, 'err');
-    }).analyzeEtymology(source.value);
+    }).analyzeEtymology(source.value, languageVersion);
   }
 
   function removePhrase(id) {
@@ -1645,7 +1853,8 @@
       return say('Actualizá la vista previa antes de importar.', 'err');
     }
     var payload = { text:settings.text, delimiter:settings.delimiter, hasHeader:settings.hasHeader, expectedLanguageVersion:state.language.version,
-      deColumn:Number(document.getElementById('import-de').value), esColumn:Number(document.getElementById('import-es').value) };
+      deColumn:Number(document.getElementById('import-de').value), esColumn:Number(document.getElementById('import-es').value),
+      pronunciationColumn:Number(document.getElementById('import-pronunciation').value), kanaColumn:Number(document.getElementById('import-kana').value) };
     state.languageBusy++;
     google.script.run.withSuccessHandler(function (result) {
       state.languageBusy--;
@@ -1662,7 +1871,7 @@
   }
 
   function reload(done, preservePrint) {
-    if (state.generator.saving) return say('Esperá a que termine el guardado antes de actualizar.', 'err');
+    if (state.generator.saving || state.printPreviewSaving) return say('Esperá a que termine el guardado antes de actualizar.', 'err');
     if (state.loadingData) return;
     state.loadingData = true;
     google.script.run.withSuccessHandler(function (data) {
@@ -1686,6 +1895,16 @@
     if (!button) return;
     var act = button.dataset.act;
     if (state.configSaving && act !== 'save-language') return;
+    if (act === 'suggest-pronunciation') return suggestPronunciation_(button);
+    if (act === 'toggle-pronunciation') {
+      state.showPronunciation = !state.showPronunciation;
+      if (state.view === 'manage') {
+        button.textContent = (state.showPronunciation ? 'Ocultar' : 'Mostrar') + ' pronunciación';
+        button.setAttribute('aria-pressed', String(state.showPronunciation));
+        return renderManageList();
+      }
+      return render();
+    }
     if (act === 'save-language') return saveLanguageSettings_();
     if (act === 'generate-phrases') return generatePhrases_();
     if (act === 'save-generated') return saveGeneratedPhrases_();
@@ -1709,6 +1928,7 @@
     if (act === 'move-print-collection') return movePrintCollection_(Number(button.dataset.index), Number(button.dataset.direction));
     if (act === 'preview-material') return previewPrintMaterial_();
     if (act === 'generate-material') return generatePrintMaterial_();
+    if (act === 'save-print-pronunciation') return savePrintPronunciation_();
     if (act === 'switch-view') {
       if (state.view === 'print') capturePrintPreview_();
       stopPlayer_();
@@ -1798,7 +2018,14 @@
     if (event.target.id === 'generator-context') state.generator.context = event.target.value;
     else if (event.target.id === 'language-name') state.customName = event.target.value;
     else if (event.target.id === 'language-locale') state.customLocale = event.target.value;
-    else if (event.target.matches('[data-generator-field]')) state.generator.items[Number(event.target.dataset.index)][event.target.dataset.generatorField] = event.target.value;
+    else if (event.target.id === 'translation-name') state.customTranslationName = event.target.value;
+    else if (event.target.id === 'translation-locale') state.customTranslationLocale = event.target.value;
+    else if (event.target.id === 'f-de') originalChanged_();
+    else if (event.target.matches('[data-generator-field]')) {
+      var draftIndex = Number(event.target.dataset.index);
+      state.generator.items[draftIndex][event.target.dataset.generatorField] = event.target.value;
+      if (event.target.dataset.generatorField === 'de') originalChanged_(draftIndex);
+    }
     else if (event.target.id === 'manage-search') { state.manageQuery = event.target.value; state.managePage = 1; renderManageList(); }
     else if (event.target.id === 'study-search') { state.studyQuery = event.target.value; state.studyPage = 1; renderStudyList(); }
     else if (event.target.id === 'import-text') state.importText = event.target.value;
@@ -1824,6 +2051,12 @@
       if (state.languageChoice === 'other' && LANGUAGES.some(function (item) { return item.locale === state.customLocale; })) {
         state.customName = '';
         state.customLocale = '';
+      }
+      return renderSettings();
+    } else if (event.target.id === 'translation-choice') {
+      state.translationChoice = event.target.value;
+      if (state.translationChoice === 'other' && LANGUAGES.some(function (item) { return item.locale === state.customTranslationLocale; })) {
+        state.customTranslationName = ''; state.customTranslationLocale = '';
       }
       return renderSettings();
     } else if (event.target.id === 'generator-level') {

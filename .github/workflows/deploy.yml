@@ -29,6 +29,8 @@ jobs:
         run: node test-print-flow.mjs
       - name: Check Gemini response parsing
         run: node test-ai-flow.mjs
+      - name: Check language pairs and pronunciation
+        run: node test-language-flow.mjs
       - name: Check client syntax
         run: node test-client-syntax.mjs
       - name: Push to Apps Script

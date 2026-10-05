@@ -1,4 +1,4 @@
-# deutsch-lernen-app
+# Sprache Lernen App
 
 ## Deploy
 
@@ -11,16 +11,16 @@ El workflow usa los secrets `CLASPRC_JSON` y `CLASP_JSON`; no los agregues al
 repositorio.
 
 La web app es privada. En una copia nueva, su proyecto de Apps Script queda
-vinculado al Sheet desde el que abrís **Frases → Abrir frases** por primera vez.
+vinculado al Sheet desde el que abrís **Sprache Lernen App → Abrir app** por primera vez.
 Esa apertura también permite usar luego la URL de la web app. Si entrás primero
 por la URL de la copia, la app te indica que la abras una vez desde el menú del
 Sheet. El despliegue de producción conserva la planilla original.
 
 Para usar el código en otra planilla, creá su Apps Script desde **Extensiones →
 Apps Script**, copiá `Code.gs`, `Ai.gs` y `App.html`, recargá el Sheet y abrí
-**Frases → Abrir frases**. Elegí el idioma objetivo en la configuración inicial.
-Cada proyecto conserva su propio idioma y su propia planilla; el CI de este
-repositorio sigue desplegando únicamente la instalación alemana original. Si
+**Sprache Lernen App → Abrir app**. Elegí el idioma objetivo y el idioma de traducción en la configuración inicial.
+Cada proyecto conserva su propio par de idiomas y su propia planilla; el CI de este
+repositorio sigue desplegando la planilla de producción configurada. Si
 querés una URL independiente para la copia, desplegala como web app desde ese
 nuevo proyecto. Configurá también allí `GEMINI_API_KEY` para usar la IA: las
 Script Properties no se copian al pegar el código.
@@ -35,8 +35,8 @@ antes de seguir trabajando para traer esos cambios sin pisarlos.
 
 La pantalla **Material** permite previsualizar y editar las frases, y descargar
 HTML con tabla, tipografía grande y espaciado ajustable. También conserva la
-descarga Markdown para usarla con otro editor. Ejecutá **Frases → Preparar
-hoja** una vez para aplicar la columna `Incluida en material`.
+descarga Markdown para usarla con otro editor. Ejecutá **Sprache Lernen App →
+Preparar hoja** para aplicar los encabezados de las columnas nuevas.
 
 ## IA con Gemini
 
@@ -57,7 +57,7 @@ compatible, la app lo indica y deja el resto de funciones usable.
 
 En **Generar**, escribí una situación o temática y elegí **Intermedio (B1–B2)**
 o **Avanzado (C1–C2)** para obtener 10 frases en el idioma objetivo con
-traducción natural al español, usando la misma clave Gemini.
+traducción natural al idioma configurado, usando la misma clave Gemini.
 Revisá y editá los resultados y marcá las frases que quieras guardar. Elegir
 colecciones es opcional: sin destinos, las frases nuevas quedan en **Sin
 colección**. Si una frase ya existe, conserva su traducción, progreso y
@@ -67,3 +67,35 @@ que falten.
 Los borradores se conservan al navegar entre secciones, pero se pierden al
 recargar o cerrar la app. Generar otra tanda pide confirmar el descarte de los
 borradores pendientes y los reemplaza sólo si la generación termina bien.
+
+## Idiomas y pronunciación
+
+En **Configuración**, cada planilla elige su idioma objetivo y su idioma de
+traducción (español por defecto). El par se usa al traducir, generar frases,
+explicar etimología y titular las columnas del material. Cambiarlo pide
+confirmación y conserva las frases existentes. La interfaz sigue en español.
+
+Las frases pueden guardar **Pronunciación** y, para japonés, **Lectura en kana**
+completa, sin kanji, además de romaji. Las columnas se agregan al final; las
+frases anteriores empiezan con estas ayudas vacías. Podés escribirlas o usar
+**Sugerir pronunciación con IA** en el editor y en cada borrador de **Generar**.
+La sugerencia es editable y no guarda automáticamente. Para otros idiomas,
+se pide la romanización convencional, como pinyin con tonos para mandarín.
+Si cambiás el original, la app avisa que revises sus ayudas.
+
+**Mostrar/ocultar pronunciación** controla ambas ayudas japonesas a la vez.
+En los ejercicios, sólo aparecen cuando el original está visible; el audio
+siempre lee el original. La búsqueda también encuentra kana y romanización.
+
+CSV y TSV permiten mapear columnas opcionales de pronunciación y kana.
+Los archivos de dos columnas siguen funcionando. HTML y Markdown muestran
+objetivo | pronunciación | traducción; en japonés, kana precede a romaji.
+Si ninguna frase incluida tiene ayudas, se conservan las dos columnas.
+La vista previa permite editar las ayudas y **Guardar pronunciación** las
+actualiza en la planilla antes de descargar; las demás ediciones sólo afectan
+el HTML. Guardar cambios en el original, la traducción o las ayudas quita la
+marca **Incluida en material**, para volver a generar la frase corregida.
+
+Verificación local: ejecutá los `test-*.mjs` con Node. Las pruebas no requieren
+dependencias adicionales, salvo `test-preview-flow.mjs`, que usa Firefox
+instalado para comprobar la edición de la vista previa y el audio al revelar.
