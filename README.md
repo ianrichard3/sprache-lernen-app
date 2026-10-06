@@ -75,21 +75,34 @@ traducción (español por defecto). El par se usa al traducir, generar frases,
 explicar etimología y titular las columnas del material. Cambiarlo pide
 confirmación y conserva las frases existentes. La interfaz sigue en español.
 
-Las frases pueden guardar **Pronunciación** y, para japonés, **Lectura en kana**
-completa, sin kanji, además de romaji. Las columnas se agregan al final; las
-frases anteriores empiezan con estas ayudas vacías. Podés escribirlas o usar
-**Sugerir pronunciación con IA** en el editor y en cada borrador de **Generar**.
-La sugerencia es editable y no guarda automáticamente. Para otros idiomas,
+Las frases pueden guardar **Pronunciación** y, para japonés, **Romaji** y
+**Kanji con furigana**. El furigana desglosa sólo las palabras que contienen
+kanji en una sola línea. El separador exacto entre términos es tres espacios,
+tres guiones y tres espacios (`   ---   `):
+
+```text
+日本語（にほんご）   ---   本（ほん）   ---   1冊（いっさつ）   ---   読めていません（よめていません）
+```
+
+La IA responde sólo con la línea, sin introducciones, traducciones ni explicaciones.
+Conserva las formas conjugadas completas
+y omite palabras escritas sólo en kana. Si el original no contiene kanji, la app
+avisa que no necesita furigana, conserva las ayudas existentes y no llama a la IA.
+**Sugerir romaji con IA** y **Sugerir furigana con IA** son botones independientes
+en el editor y en cada borrador de **Generar**: cada uno pide y completa sólo
+su campo. Podés editar las ayudas y las sugerencias no guardan automáticamente.
+La columna existente se reutiliza: las lecturas anteriores se conservan hasta
+volver a sugerirlas y guardar. Para otros idiomas,
 se pide la romanización convencional, como pinyin con tonos para mandarín.
 Si cambiás el original, la app avisa que revises sus ayudas.
 
 **Mostrar/ocultar pronunciación** controla ambas ayudas japonesas a la vez.
 En los ejercicios, sólo aparecen cuando el original está visible; el audio
-siempre lee el original. La búsqueda también encuentra kana y romanización.
+siempre lee el original. La búsqueda también encuentra furigana y romanización.
 
-CSV y TSV permiten mapear columnas opcionales de pronunciación y kana.
+CSV y TSV permiten mapear columnas opcionales de pronunciación y furigana.
 Los archivos de dos columnas siguen funcionando. HTML y Markdown muestran
-objetivo | pronunciación | traducción; en japonés, kana precede a romaji.
+objetivo | pronunciación | traducción; en japonés, el desglose con furigana precede a romaji.
 Si ninguna frase incluida tiene ayudas, se conservan las dos columnas.
 La vista previa permite editar las ayudas y **Guardar pronunciación** las
 actualiza en la planilla antes de descargar; las demás ediciones sólo afectan

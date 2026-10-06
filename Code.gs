@@ -5,7 +5,7 @@
  *
  * Hoja "Frases":
  * A: ID | B: Frase objetivo | C: Traducción | D: Notas | E: Estado | F: Etiquetas
- * G: Creado | H: Actualizado | I: Incluida en material | J: Pronunciación | K: Lectura en kana
+ * G: Creado | H: Actualizado | I: Incluida en material | J: Pronunciación | K: Kanji con furigana
  *
  * Hoja "Historial": ID | Resultado | Estudiado
  *
@@ -36,7 +36,7 @@ const HISTORY_WIDTH = HISTORY_HEADERS.length;
 const HISTORY_LIMIT = 20;
 
 const HEADERS = [
-  'ID', 'Frase objetivo', 'Traducción', 'Notas', 'Estado', 'Etiquetas', 'Creado', 'Actualizado', 'Incluida en material', 'Pronunciación', 'Lectura en kana'
+  'ID', 'Frase objetivo', 'Traducción', 'Notas', 'Estado', 'Etiquetas', 'Creado', 'Actualizado', 'Incluida en material', 'Pronunciación', 'Kanji con furigana'
 ];
 
 const COL = { ID: 1, DE: 2, ES: 3, NOTES: 4, STATUS: 5, TAGS: 6, CREATED: 7, UPDATED: 8, PRINTED_AT: 9, PRONUNCIATION: 10, KANA: 11 };
@@ -1120,7 +1120,7 @@ function printHtmlBody_(plan, now) {
     lines.push('<section><h2>' + printHtmlCell_(group.name) + '</h2><table><thead><tr><th>' + printHtmlCell_(heading) + '</th>' + (pronunciation ? '<th data-print-pronunciation>Pronunciación</th>' : '') + '<th>' + printHtmlCell_(translationHeading) + '</th></tr></thead><tbody>');
     group.items.forEach(function (item) {
       const aids = (japanese ? ['kana', 'pronunciation'] : ['pronunciation']).map(function (field) {
-        const label = field === 'kana' ? 'Kana' : japanese ? 'Romaji' : 'Romanización';
+        const label = field === 'kana' ? 'Kanji con furigana' : japanese ? 'Romaji' : 'Romanización';
         return '<span data-pronunciation-field="' + field + '" data-phrase-id="' + printHtmlCell_(item.id) +
           '" data-placeholder="' + label + ' (opcional)" role="textbox" aria-label="' + label + ' de ' + printHtmlCell_(item.id) + '">' + printHtmlCell_(item[field]) + '</span>';
       }).join('');
@@ -1390,7 +1390,7 @@ function phraseContentChanged_(row, de, es, pronunciation, kana) {
 function pronunciationFields_(payload) {
   const fields = {};
   ['pronunciation', 'kana'].forEach(function (key) {
-    if (payload[key] != null && typeof payload[key] !== 'string') throw new Error('La pronunciación y la lectura en kana deben ser texto.');
+    if (payload[key] != null && typeof payload[key] !== 'string') throw new Error('La pronunciación y el furigana deben ser texto.');
     fields[key] = normalize_(payload[key]);
   });
   return fields;

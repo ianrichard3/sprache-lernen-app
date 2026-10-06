@@ -227,15 +227,19 @@
     var generated = index != null;
     var prefix = generated ? 'generated-' : 'f-';
     var suffix = generated ? '-' + index : '';
+    var review = item.pronunciationNeedsReview || {};
     function field(key, label) {
+      var action = key === 'kana' ? 'furigana' : japanese_() ? 'romaji' : 'pronunciación';
       return '<div class="field"><label for="' + prefix + key + suffix + '">' + label + ' (opcional)</label><textarea id="' + prefix + key + suffix + '"' +
-        (generated ? ' data-generator-field="' + key + '" data-index="' + index + '"' : '') + (locked || '') + '>' + esc(item[key]) + '</textarea></div>';
+        (generated ? ' data-generator-field="' + key + '" data-index="' + index + '"' : '') + (locked || '') + '>' + esc(item[key]) + '</textarea>' +
+        (key === 'kana' ? '<p class="hint">Una sola línea: <code style="white-space:pre-wrap">日本語（にほんご）   ---   本（ほん）</code></p>' : '') +
+        '<div class="ai-actions"><button class="ghost" data-act="suggest-pronunciation" data-field="' + key + '"' + (generated ? ' data-index="' + index + '"' : '') +
+        (item.pronunciationBusy ? ' disabled' : locked || '') + '>' + (item.pronunciationBusy === key ? 'Sugiriendo…' : 'Sugerir ' + action + ' con IA') + '</button></div></div>';
     }
-    return (japanese_() ? field('kana', 'Lectura completa en kana (sin kanji)') : '') +
+    return (japanese_() ? field('kana', 'Kanji con furigana') : '') +
       field('pronunciation', japanese_() ? 'Romaji' : 'Pronunciación / romanización') +
-      '<p class="hint" id="' + prefix + 'pronunciation-warning' + suffix + '"' + (item.pronunciationNeedsReview ? '' : ' hidden') + '>El original cambió: revisá su pronunciación.</p>' +
-      '<div class="ai-actions"><button class="ghost" data-act="suggest-pronunciation"' + (generated ? ' data-index="' + index + '"' : '') +
-      (item.pronunciationBusy ? ' disabled' : locked || '') + '>' + (item.pronunciationBusy ? 'Sugiriendo…' : 'Sugerir pronunciación con IA') + '</button></div><p class="hint">Editable. La sugerencia no guarda la frase.</p>';
+      '<p class="hint" id="' + prefix + 'pronunciation-warning' + suffix + '"' + (review.pronunciation || review.kana ? '' : ' hidden') + '>El original cambió: revisá sus ayudas.</p>' +
+      '<p class="hint">Editable. Cada botón completa sólo su campo. La sugerencia no guarda la frase.</p>';
   }
 
   function languageDraft_(language) {
@@ -871,7 +875,7 @@
       '<label><input type="radio" name="delimiter" value="tab"' + (state.importDelimiter === '\t' ? ' checked' : '') + '> Tab</label>' +
       '<label><input id="import-header" type="checkbox"' + (state.importHasHeader ? ' checked' : '') + '> Primera fila: encabezados</label></div><button class="ghost" data-act="preview-import">Ver vista previa</button>' +
       (preview ? '<div class="preview"><div class="mapping"><div><label for="import-de">Columna en ' + esc(targetName_()) + '</label><select id="import-de">' + optionHtml(preview.data.columnCount) + '</select></div>' +
-        '<div><label for="import-es">Columna en ' + esc(translationName_()) + '</label><select id="import-es">' + optionHtml(preview.data.columnCount) + '</select></div><div><label for="import-pronunciation">Pronunciación (opcional)</label><select id="import-pronunciation"><option value="-1">Sin columna</option>' + optionHtml(preview.data.columnCount) + '</select></div><div><label for="import-kana">Lectura en kana (opcional)</label><select id="import-kana"><option value="-1">Sin columna</option>' + optionHtml(preview.data.columnCount) + '</select></div></div><table><tbody>' + rows + '</tbody></table>' +
+        '<div><label for="import-es">Columna en ' + esc(translationName_()) + '</label><select id="import-es">' + optionHtml(preview.data.columnCount) + '</select></div><div><label for="import-pronunciation">Pronunciación (opcional)</label><select id="import-pronunciation"><option value="-1">Sin columna</option>' + optionHtml(preview.data.columnCount) + '</select></div><div><label for="import-kana">Kanji con furigana (opcional)</label><select id="import-kana"><option value="-1">Sin columna</option>' + optionHtml(preview.data.columnCount) + '</select></div></div><table><tbody>' + rows + '</tbody></table>' +
         '<div class="form-actions" style="margin-top:12px"><button class="primary" data-act="import">Importar</button></div></div>' : '') + '</section>';
   }
 
@@ -1682,58 +1686,61 @@
     var pronunciation = generated ? item.pronunciation : document.getElementById('f-pronunciation').value;
     var kanaField = document.getElementById('f-kana');
     var kana = generated ? item.kana : kanaField && kanaField.value;
-    if (!pronunciation && !kana) return;
-    if (item) item.pronunciationNeedsReview = true;
+    var review = {pronunciation:!!pronunciation, kana:!!kana};
     var warning = document.getElementById(generated ? 'generated-pronunciation-warning-' + index : 'f-pronunciation-warning');
-    if (warning) warning.hidden = false;
+    if (item) item.pronunciationNeedsReview = review;
+    else if (warning) warning.pronunciationNeedsReview = review;
+    if (warning) warning.hidden = !review.pronunciation && !review.kana;
   }
 
   function suggestPronunciation_(button) {
+    var field = button.dataset.field || 'pronunciation';
     var generated = button.dataset.index != null;
     var index = generated ? Number(button.dataset.index) : null;
     var item = generated ? state.generator.items[index] : null;
-    if (item && (item.saved || item.pronunciationBusy || state.generator.busy)) return;
+    if (button.disabled || (item && (item.saved || item.pronunciationBusy || state.generator.busy))) return;
     var source = generated ? null : document.getElementById('f-de');
-    var pronunciationField = generated ? null : document.getElementById('f-pronunciation');
-    var kanaField = generated ? null : document.getElementById('f-kana');
+    var target = generated ? null : document.getElementById('f-' + field);
     var text = generated ? item.de : source.value;
     if (!text.trim()) return say('Escribí el texto original antes de sugerir la pronunciación.', 'err');
-    var previousPronunciation = generated ? item.pronunciation : pronunciationField.value;
-    var previousKana = generated ? item.kana : kanaField && kanaField.value;
+    if (field === 'kana' && !/\p{Script=Han}/u.test(text)) return say('La frase no tiene kanji; no necesita furigana.');
+    var previous = generated ? item[field] : target.value;
     var languageVersion = state.language.version;
-    if (item) item.pronunciationBusy = true;
+    var buttonLabel = button.textContent;
+    if (item) item.pronunciationBusy = field;
     button.disabled = true;
     button.textContent = 'Sugiriendo…';
     state.languageBusy++;
+    if (generated && state.view === 'generate') renderGenerator();
     google.script.run.withSuccessHandler(function (result) {
       state.languageBusy--;
       if (item) item.pronunciationBusy = false;
-      restoreAiButton(button, 'Sugerir pronunciación con IA');
+      restoreAiButton(button, buttonLabel);
       if (languageVersion !== state.language.version) return;
-      var unchanged = generated ? state.generator.items.indexOf(item) !== -1 && item.de === text && item.pronunciation === previousPronunciation && item.kana === previousKana :
-        document.body.contains(button) && source.value === text && pronunciationField.value === previousPronunciation && (kanaField && kanaField.value) === previousKana;
+      var unchanged = generated ? state.generator.items.indexOf(item) !== -1 && item.de === text && item[field] === previous :
+        document.body.contains(button) && source.value === text && target.value === previous;
       if (!unchanged) {
         if (generated && state.view === 'generate') renderGenerator();
         return say('El texto o sus ayudas cambiaron. Volvé a sugerir la pronunciación.', 'err');
       }
+      var warning = document.getElementById(generated ? 'generated-pronunciation-warning-' + index : 'f-pronunciation-warning');
+      var review = (item || warning).pronunciationNeedsReview || {};
+      review[field] = false;
       if (item) {
-        item.pronunciation = result.pronunciation;
-        item.kana = result.kana;
-        item.pronunciationNeedsReview = false;
+        item[field] = result[field];
         if (state.view === 'generate') renderGenerator();
       } else {
-        pronunciationField.value = result.pronunciation;
-        if (kanaField) kanaField.value = result.kana;
-        document.getElementById('f-pronunciation-warning').hidden = true;
+        target.value = result[field];
       }
-      say('Pronunciación sugerida. Revisala antes de guardar.');
+      if (warning) warning.hidden = !review.pronunciation && !review.kana;
+      say('Ayuda sugerida. Revisala antes de guardar.');
     }).withFailureHandler(function (err) {
       state.languageBusy--;
       if (item) item.pronunciationBusy = false;
-      restoreAiButton(button, 'Sugerir pronunciación con IA');
+      restoreAiButton(button, buttonLabel);
       if (generated && state.view === 'generate') renderGenerator();
       say(err.message, 'err');
-    }).suggestPronunciation(text, languageVersion);
+    }).suggestPronunciation(text, languageVersion, field);
   }
 
   function restoreAiButton(button, label) {

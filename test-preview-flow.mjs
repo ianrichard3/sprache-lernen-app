@@ -12,7 +12,7 @@ const mock = String.raw`<script>
 var spoken = [], cancellations = 0;
 Object.defineProperty(window,'speechSynthesis',{value:{getVoices:()=>[{lang:'ja-JP',name:'Japanese'}],cancel:()=>cancellations++,speak:utterance=>spoken.push(utterance.text),addEventListener(){}}});
 window.SpeechSynthesisUtterance=function(text){this.text=text;};
-var calls = [], pendingSave, deferSave = false, failSave = false, deferredTranslation;
+var calls = [], pendingSave, deferSave = false, failSave = false, deferredTranslation, deferredPronunciation;
 var snapshot = {language:{name:'japonés',locale:'ja-JP',translation:{name:'inglés',locale:'en-US'},version:1},
  items:[{id:'F1',de:'今日はコーヒーを飲みます。',es:'I will drink coffee today.',kana:'きょうはコーヒーをのみます。',pronunciation:'Kyō wa kōhī o nomimasu.',notes:'',tags:[],updated:'initial',printedAt:'printed'},
  {id:'F2',de:'ありがとう。',es:'Thank you.',kana:'',pronunciation:'',notes:'',tags:[],updated:'initial2',printedAt:''}],
@@ -34,9 +34,11 @@ window.google={script:{get run() {
  return new Proxy({}, {get:function(_,key) {
   if(key==='withSuccessHandler') return function(fn){success=fn;return this;};
   if(key==='withFailureHandler') return function(fn){failure=fn;return this;};
-  return function(payload) {
-   calls.push([key,payload]);
+  return function(payload,version,field) {
+   calls.push([key,payload,version,field]);
    if(key==='suggestGermanTranslation'||key==='suggestSpanishTranslation') {deferredTranslation=success;return;}
+   if(key==='suggestPronunciation') {deferredPronunciation=success;return;}
+   if(key==='generatePhrases') return success(Array.from({length:10},()=>({de:snapshot.items[0].de,es:snapshot.items[0].es})));
    if(key==='loadAppData') return success(structuredClone(snapshot));
    if(key==='previewPhraseMaterial') return success(materialResult());
    if(key==='generatePhraseHtml') {
@@ -78,6 +80,29 @@ const smoke = String.raw`<script>
   click('[data-act="translate"]');node('#f-de').value='Manual original';deferredTranslation('Late original');
   check(node('#f-de').value==='Manual original','preserve original');
   check(!node('#ai-translate').disabled,'translation reenabled');
+  // Each pronunciation button requests and fills only its own field.
+  node('#f-de').value=snapshot.items[0].de;node('#f-de').dispatchEvent(new Event('input',{bubbles:true}));
+  var furigana='今日（きょう）   ---   飲みます（のみます）';
+  click('[data-field="pronunciation"][data-act="suggest-pronunciation"]');
+  check(calls.at(-1)[3]==='pronunciation','request only romaji');
+  deferredPronunciation({pronunciation:'Kyō wa kōhī o nomimasu.',kana:''});
+  check(node('#f-kana').value===snapshot.items[0].kana,'romaji preserves existing kana');
+  check(!node('#f-pronunciation-warning').hidden,'furigana still needs review');
+  click('[data-field="kana"][data-act="suggest-pronunciation"]');
+  check(calls.at(-1)[3]==='kana','request only furigana');
+  node('#f-pronunciation').value='Manual romaji';
+  deferredPronunciation({pronunciation:'',kana:furigana});
+  check(node('#f-pronunciation').value==='Manual romaji','furigana preserves edits to romaji');
+  check(node('#f-kana').value===furigana,'one-line furigana fills its field with exact spaces');
+  check(node('#f-de').value===snapshot.items[0].de,'original stays unchanged');
+  check(node('#f-pronunciation-warning').hidden,'both aids reviewed');
+  check(calls.filter(call=>call[0]==='suggestPronunciation').length===2,'one request per click');
+  node('#f-de').value='ありがとう。';
+  var callsBeforeNoKanji=calls.length;
+  click('[data-field="kana"][data-act="suggest-pronunciation"]');
+  check(node('#note').textContent.includes('no tiene kanji'),'no-kanji notice in editor');
+  check(calls.length===callsBeforeNoKanji,'no-kanji editor avoids RPC');
+  check(node('#f-kana').value===furigana,'no-kanji editor preserves existing aid');
   click('[data-view="collections"]');click('[data-act="open-collection"][data-id="C1"]');
   var phase=node('#session-phase');phase.value='recall';phase.dispatchEvent(new Event('change',{bubbles:true}));
   check(!document.querySelector('.session-row-de'),'recall hides original');
@@ -137,6 +162,30 @@ const smoke = String.raw`<script>
   check(document.querySelectorAll('#print-preview-content tbody tr:first-child td').length===4,'two columns in both tables');
   check(node('#print-preview-content tr[data-phrase-id="F1"] td:first-child').textContent==='File-only original','column removal retains file text');
   check(snapshot.items[0].printedAt==='','clearing aids clears mark');
+  // Generated drafts share the same independent actions.
+  click('[data-view="generate"]');
+  node('#generator-context').value='Coffee';node('#generator-context').dispatchEvent(new Event('input',{bubbles:true}));
+  click('[data-act="generate-phrases"]');
+  click('[data-field="kana"][data-index="0"][data-act="suggest-pronunciation"]');
+  check(calls.at(-1)[3]==='kana','draft requests only furigana');
+  check(node('[data-field="pronunciation"][data-index="0"][data-act="suggest-pronunciation"]').disabled,'other draft button visibly disabled during request');
+  var pendingCalls=calls.length;
+  click('[data-field="pronunciation"][data-index="0"][data-act="suggest-pronunciation"]');
+  check(calls.length===pendingCalls,'disabled draft button makes no request');
+  deferredPronunciation({pronunciation:'',kana:furigana});
+  check(node('#generated-kana-0').value===furigana,'draft fills furigana');
+  check(node('#generated-pronunciation-0').value==='','draft preserves empty romaji');
+  click('[data-field="pronunciation"][data-index="0"][data-act="suggest-pronunciation"]');
+  check(calls.at(-1)[3]==='pronunciation','draft requests only romaji');
+  deferredPronunciation({pronunciation:'Kyō wa kōhī o nomimasu.',kana:''});
+  check(node('#generated-pronunciation-0').value==='Kyō wa kōhī o nomimasu.','draft fills romaji');
+  check(node('#generated-kana-0').value===furigana,'draft romaji preserves furigana');
+  node('#generated-de-0').value='ありがとう。';node('#generated-de-0').dispatchEvent(new Event('input',{bubbles:true}));
+  callsBeforeNoKanji=calls.length;
+  click('[data-field="kana"][data-index="0"][data-act="suggest-pronunciation"]');
+  check(node('#note').textContent.includes('no tiene kanji'),'no-kanji notice in draft');
+  check(calls.length===callsBeforeNoKanji,'no-kanji draft avoids RPC');
+  check(node('#generated-kana-0').value===furigana,'no-kanji draft preserves existing aid');
   await fetch('/result',{method:'POST',body:JSON.stringify({count})});
  } catch(error) {await fetch('/result',{method:'POST',body:JSON.stringify({count,error:error.message+"\n"+error.stack})});}
 }());
@@ -163,7 +212,7 @@ try {
   browser.on('error', error => finish({error:error.message}));
   const result = await report;
   assert.equal(result.error, undefined, result.error);
-  console.log(`Preview editing, translation and recall audio in Firefox: ${result.count} checks OK`);
+  console.log(`Independent pronunciation, preview editing, translation and recall audio in Firefox: ${result.count} checks OK`);
 } finally {
   clearTimeout(timer);
   if (browser && browser.exitCode === null) {
