@@ -133,7 +133,8 @@ function suggestPronunciation(text, expectedLanguageVersion, field) {
       const kana = remaining.match(/^\p{Script=Hiragana}+/u);
       if (/\p{Script=Han}$/u.test(word) && kana && !/^(?:は|が|を|の|に|へ|と|も|や|で|か|な|だ|です)/.test(kana[0])) return false;
       if (/\p{Script=Hiragana}$/u.test(word) && /^(?:ます|ません|ました|ましょう|せん|ない|なかった|たい|たかった|ている|てい|て|で|れる|られる|させる|した|ん)/.test(remaining)) return false;
-      if (/\p{Script=Hiragana}$/u.test(word) && !pair[2].endsWith((word.match(/\p{Script=Hiragana}+$/u) || [''])[0])) return false;
+      const reading = pair[2].normalize('NFKC').replace(/[ァ-ヶ]/g, function (kana) { return String.fromCharCode(kana.charCodeAt(0) - 0x60); });
+      if (/\p{Script=Hiragana}$/u.test(word) && !reading.endsWith((word.match(/\p{Script=Hiragana}+$/u) || [''])[0])) return false;
       cursor = start + word.length;
       return true;
     }) && !/\p{Script=Han}/u.test(phrase.slice(cursor));
