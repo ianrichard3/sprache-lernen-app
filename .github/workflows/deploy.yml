@@ -33,6 +33,8 @@ jobs:
         run: node test-language-flow.mjs
       - name: Check client syntax
         run: node test-client-syntax.mjs
+      - name: Check delayed responses and concurrent operations
+        run: node test-race-flow.mjs
       - name: Push to Apps Script
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}

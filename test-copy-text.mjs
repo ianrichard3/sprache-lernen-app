@@ -13,7 +13,8 @@ const sessionStart = html.indexOf('  function sessionToSsmlText_(items, reps, pa
 
 assert.notEqual(sessionStart, -1, 'sessionToSsmlText_ is missing');
 
-const sessionToSsmlText = Function(html.slice(sessionStart, end) + '\nreturn sessionToSsmlText_;')();
+const escapeSource = html.slice(html.indexOf('  function esc(text)'), html.indexOf('  function say('));
+const sessionToSsmlText = Function(escapeSource + html.slice(sessionStart, end) + '\nreturn sessionToSsmlText_;')();
 
 const originalRandom = Math.random;
 Math.random = () => 0.99;
@@ -37,6 +38,8 @@ assert.equal(
   sessionToSsmlText([{ de: 'Erste' }, { de: 'Zweite' }], 1, 5000),
   'Erste\n\n<break time="5s" />\n\nZweite\n\n<break time="5s" />'
 );
+assert.equal(sessionToSsmlText([{de:'Brot & Butter < 5 "Euro"'}], 1, 1000), 'Brot &amp; Butter &lt; 5 &quot;Euro&quot;\n\n<break time="1s" />');
+assert.equal(phrasesToText([{de:'Brot & Butter < 5 "Euro"'}]), 'Brot & Butter < 5 "Euro".', 'Plain text copy stays plain text');
 assert.match(html, /ssmlOptionsHtml_\(\[1000, 2000, 3000, 5000\], state\.ssmlSettings\.pause, ' s'\)/);
 assert.ok(html.includes('data-act="copy-session-ssml"'));
 

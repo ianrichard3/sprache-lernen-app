@@ -32,6 +32,10 @@ Navegar entre pantallas y filtrar colecciones usa ese estado local; las
 mutaciones hacen una sola llamada y actualizan el estado recibido. Si editás
 la planilla directamente mientras la app está abierta, usá **Actualizar datos**
 antes de seguir trabajando para traer esos cambios sin pisarlos.
+Actualizar datos y las escrituras no se solapan; si hay una pendiente, la app pide esperar.
+Los callbacks conservan los borradores que editaste durante la espera y sólo
+cierran el formulario guardado si sigue siendo el mismo y no cambió. Actualizar
+datos conserva un borrador abierto y detecta conflictos si cambió su contenido.
 
 **Herramientas → Preparar material para imprimir** permite previsualizar y editar las frases, y descargar
 HTML con tabla, tipografía grande y espaciado ajustable. También conserva la
@@ -62,6 +66,8 @@ Los filtros se aplican antes de paginar, a 25 frases por página.
 
 La práctica empieza en **Aleatorio** y también permite **Más recientes primero**.
 El orden aleatorio se conserva al paginar, revelar frases y copiar SSML.
+También se conserva al terminar guardados en segundo plano, junto con la página
+y las frases reveladas. Las frases nuevas se agregan al final de ese orden.
 Los botones globales controlan objetivo, traducción y pronunciación. Tocar una
 frase revela sus campos ocultos; tocarla otra vez los oculta. Los botones
 globales restablecen la visibilidad de toda la lista.

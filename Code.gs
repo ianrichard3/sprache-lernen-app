@@ -565,45 +565,47 @@ function publicCollection_(item, count, unassigned) {
 
 /** La única carga de datos para la UI. */
 function loadAppData() {
-  const properties = PropertiesService.getScriptProperties();
-  if (!properties.getProperty(SPREADSHEET_ID_PROPERTY) && typeof PRODUCTION_SPREADSHEET_ID !== 'string') return { setup: 'sheet' };
-  if (!properties.getProperty(LANGUAGE_PROPERTY) && typeof PRODUCTION_SPREADSHEET_ID !== 'string') return { setup: 'language', language: targetLanguage_() };
-  const ss = getSpreadsheet_();
-  const data = collectionData_(ss);
-  const counts = {};
-  const assigned = {};
-  const memberIdsByCollection = {};
+  return withLock_(function () {
+    const properties = PropertiesService.getScriptProperties();
+    if (!properties.getProperty(SPREADSHEET_ID_PROPERTY) && typeof PRODUCTION_SPREADSHEET_ID !== 'string') return { setup: 'sheet' };
+    if (!properties.getProperty(LANGUAGE_PROPERTY) && typeof PRODUCTION_SPREADSHEET_ID !== 'string') return { setup: 'language', language: targetLanguage_() };
+    const ss = getSpreadsheet_();
+    const data = collectionData_(ss);
+    const counts = {};
+    const assigned = {};
+    const memberIdsByCollection = {};
 
-  data.memberships.rows.forEach(function (member) {
-    counts[member.collectionKey] = (counts[member.collectionKey] || 0) + 1;
-    assigned[member.phraseKey] = true;
-    if (!memberIdsByCollection[member.collectionKey]) memberIdsByCollection[member.collectionKey] = [];
-    memberIdsByCollection[member.collectionKey].push(member);
-  });
-
-  const unassignedCount = data.phrases.items.filter(function (phrase) {
-    return !assigned[collectionIdKey_(phrase.id)];
-  }).length;
-  const collections = data.collections.items.map(function (collection) {
-    return publicCollection_(collection, counts[collectionIdKey_(collection.id)] || 0, false);
-  }).sort(function (a, b) { return a.name.localeCompare(b.name); });
-
-  Object.keys(memberIdsByCollection).forEach(function (key) {
-    memberIdsByCollection[key].sort(function (a, b) {
-      return a.position - b.position || a.sourceIndex - b.sourceIndex;
+    data.memberships.rows.forEach(function (member) {
+      counts[member.collectionKey] = (counts[member.collectionKey] || 0) + 1;
+      assigned[member.phraseKey] = true;
+      if (!memberIdsByCollection[member.collectionKey]) memberIdsByCollection[member.collectionKey] = [];
+      memberIdsByCollection[member.collectionKey].push(member);
     });
-    memberIdsByCollection[key] = memberIdsByCollection[key].map(function (member) {
-      return data.phrases.byId[member.phraseKey].id;
-    });
-  });
 
-  return {
-    language: targetLanguage_(),
-    items: data.phrases.items.sort(function (a, b) { return b.id.localeCompare(a.id); }),
-    collections: [{ id: UNASSIGNED_COLLECTION_ID, name: 'Sin colección', count: unassignedCount, unassigned: true }]
-      .concat(collections),
-    memberIdsByCollection: memberIdsByCollection
-  };
+    const unassignedCount = data.phrases.items.filter(function (phrase) {
+      return !assigned[collectionIdKey_(phrase.id)];
+    }).length;
+    const collections = data.collections.items.map(function (collection) {
+      return publicCollection_(collection, counts[collectionIdKey_(collection.id)] || 0, false);
+    }).sort(function (a, b) { return a.name.localeCompare(b.name); });
+
+    Object.keys(memberIdsByCollection).forEach(function (key) {
+      memberIdsByCollection[key].sort(function (a, b) {
+        return a.position - b.position || a.sourceIndex - b.sourceIndex;
+      });
+      memberIdsByCollection[key] = memberIdsByCollection[key].map(function (member) {
+        return data.phrases.byId[member.phraseKey].id;
+      });
+    });
+
+    return {
+      language: targetLanguage_(),
+      items: data.phrases.items.sort(function (a, b) { return b.id.localeCompare(a.id); }),
+      collections: [{ id: UNASSIGNED_COLLECTION_ID, name: 'Sin colección', count: unassignedCount, unassigned: true }]
+        .concat(collections),
+      memberIdsByCollection: memberIdsByCollection
+    };
+  });
 }
 
 function clearCollectionMembers_(sheet, table, predicate) {

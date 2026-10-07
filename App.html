@@ -149,13 +149,13 @@
   'use strict';
 
   var state = {
-    loadingData: false,
+    loadingData: false, writingData:false,
     setup: null, language: {name:'alemán', locale:'de-DE', translation:{name:'español', locale:'es-ES'}, version:0}, languageChoice:'de-DE', customName:'', customLocale:'', configSaving:false, languageBusy:0, translationChoice:'es-ES', customTranslationName:'', customTranslationLocale:'', showPronunciation:true,
     items: [], view: 'manage', toolView:'print',
-    editing: null, editingCollectionIds: null, managePage: 1, manageQuery: '', manageCollectionIds:[], importText: '',
+    editing: null, editingCollectionIds: null, editingUpdated:'', phraseEditorSession:0, collectionEditorSession:0, managePage: 1, manageQuery: '', manageCollectionIds:[], importText: '',
     importPreview: null, importHasHeader: true, importDelimiter: ',', importOpen:false, importColumns:{de:0, es:1, pronunciation:-1, kana:-1},
     generator: { context:'', level:'intermediate', generatedLevel:null, generatedLanguageVersion:null, items:[], collectionIds:[], busy:false, saving:false, debug:'' },
-    etymologyText: '', etymologyResult: '',
+    etymologyText: '', etymologyResult: '', etymologyRequest:0,
     collections: [], memberIdsByCollection: {}, collectionQuery: '', collectionId: null, collectionEditor: null,
     printScope: 'all', printCollectionIds: [], printOnlyUnprinted: false, printOrder: 'manual', printFormat: 'html', printFontSize: 20, printLineHeight: 1.6, printRevision: 0, printGenerating: false, printPreviewLoading: false, printPreviewSaving: false, printPreview: null, printResult: null,
     session: { order:'random', items:[], supports:{ german:true, spanish:false, pronunciation:true }, revealedIds:{}, query:'', collectionIds:[], page:1, ssmlOpen:false },
@@ -280,7 +280,7 @@
     });
     state.manageCollectionIds = state.manageCollectionIds.filter(function (id) { return !!collectionById_(id); });
     state.session.collectionIds = state.session.collectionIds.filter(function (id) { return !!collectionById_(id); });
-    refreshPractice_();
+    refreshPractice_(true);
     if (state.view === 'practice') renderPracticeList();
   }
 
@@ -297,6 +297,12 @@
   }
 
   function applyAppData_(data) {
+    var original = byId(state.editing);
+    var updated = (data.items || []).find(function (item) { return item.id === state.editing; });
+    if (original && updated && state.editingUpdated === original.updated &&
+        ['de', 'es', 'pronunciation', 'kana', 'notes', 'tags'].every(function (key) { return JSON.stringify(original[key]) === JSON.stringify(updated[key]); })) {
+      state.editingUpdated = updated.updated;
+    }
     if (state.language.version !== (data.language || {}).version) {
       state.generator.items = [];
       state.generator.generatedLevel = null; state.generator.generatedLanguageVersion = null;
@@ -318,7 +324,6 @@
       return collectionKey_(id) === collectionKey_('__unassigned__') || !!collectionById_(id);
     });
     decorateCollections_();
-    if (state.editing && byId(state.editing)) state.editingCollectionIds = collectionIdsForPhrase_(state.editing);
   }
 
   function esc(text) {
@@ -359,11 +364,22 @@
     return state.session.items;
   }
 
-  function refreshPractice_() {
+  function refreshPractice_(preserve) {
     var items = matchingItems(filterCollectionItems_(state.items, state.session.collectionIds), state.session.query);
-    state.session.items = state.session.order === 'random' ? shuffledItems_(items) : items.slice();
-    state.session.page = 1;
-    state.session.revealedIds = {};
+    if (preserve && state.session.order === 'random') {
+      var current = new Map(items.map(function (item) { return [item.id, item]; }));
+      var ordered = [];
+      state.session.items.forEach(function (item) {
+        if (current.has(item.id)) { ordered.push(current.get(item.id)); current.delete(item.id); }
+      });
+      state.session.items = ordered.concat(shuffledItems_(Array.from(current.values())));
+    } else state.session.items = state.session.order === 'random' ? shuffledItems_(items) : items.slice();
+    if (!preserve) {
+      state.session.page = 1;
+      state.session.revealedIds = {};
+    } else Object.keys(state.session.revealedIds).forEach(function (id) {
+      if (!items.some(function (item) { return item.id === id; })) delete state.session.revealedIds[id];
+    });
   }
 
   function toggleSupport_(support) {
@@ -398,7 +414,7 @@
     var breakTag = '<break time="' + (Number(pause) / 1000) + 's" />';
     var blocks = [];
     items.forEach(function (item) {
-      var text = String(item.de == null ? '' : item.de).trim().replace(/\s+/g, ' ');
+      var text = esc(String(item.de == null ? '' : item.de).trim().replace(/\s+/g, ' '));
       for (var repeat = 0; text && repeat < reps; repeat++) blocks.push(text, breakTag);
     });
     return blocks.join('\n\n');
@@ -622,7 +638,7 @@
 
   function capturePrintPreview_() {
     var preview = document.getElementById('print-preview-content');
-    if (preview && state.printPreview) state.printPreview.body = preview.innerHTML;
+    if (preview && state.printPreview && preview.printPreview === state.printPreview) state.printPreview.body = preview.innerHTML;
   }
 
   function printPreviewHtml_() {
@@ -697,7 +713,7 @@
     state.languageBusy++;
     clearPrintDownload_();
     renderPrint();
-    google.script.run.withSuccessHandler(function (result) {
+    writeData_('saveMaterialPronunciations', payload, function (result) {
       state.printPreviewSaving = false;
       state.languageBusy--;
       result.items.forEach(function (item) {
@@ -712,12 +728,12 @@
       }
       if (state.view === 'print') renderPrint();
       say('Pronunciación guardada. Las frases modificadas quedaron pendientes de incluir en material.');
-    }).withFailureHandler(function (err) {
+    }, function (err) {
       state.printPreviewSaving = false;
       state.languageBusy--;
       if (state.view === 'print') renderPrint();
       say(err.message, 'err');
-    }).saveMaterialPronunciations(payload);
+    });
   }
 
   function clearPrintDownload_() {
@@ -727,11 +743,11 @@
     state.printResult = null;
   }
 
-  function clearPrintResult_() {
+  function clearPrintResult_(preservePreview) {
     state.printRevision++;
     clearPrintDownload_();
     state.printPreviewLoading = false;
-    state.printPreview = null;
+    if (!preservePreview) state.printPreview = null;
   }
 
   function renderPrint() {
@@ -753,6 +769,8 @@
       printSummaryHtml_() + '<div class="print-actions"><button class="ghost" data-act="preview-material"' + (state.printPreviewLoading || state.printGenerating || state.printPreviewSaving || !estimate.unique ? ' disabled' : '') + '>' + (state.printPreviewLoading ? 'Preparando vista previa…' : 'Previsualizar') + '</button><button class="primary" data-act="generate-material"' + (state.printGenerating || state.printPreviewSaving || state.printPreviewLoading || !estimate.unique ? ' disabled' : '') + '>' + buttonLabel + '</button></div>' +
       (result ? '<div class="print-result">Material descargado: ' + result.includedCount + ' frases distintas' + (result.rowCount !== result.includedCount ? ' · ' + result.rowCount + ' filas' : '') + '.<br><a href="' + esc(result.url) + '" download="' + esc(result.name) + '">Volver a descargar ' + esc(result.name) + '</a></div>' : '') +
       printPreviewHtml_() + '</section><aside class="panel print-panel"><h2 class="section-title">Cómo funciona</h2><p class="hint">Cada colección aparece en su propio bloque: objetivo, pronunciación y traducción. Si no hay ayudas, la tabla tendrá dos columnas. Las celdas faltantes quedan vacías.</p><p class="hint">Al descargarlo, las frases incluidas quedan marcadas con la fecha de generación. Podés corregir esa marca desde Todas las Frases.</p></aside></div>';
+    var preview = document.getElementById('print-preview-content');
+    if (preview) preview.printPreview = state.printPreview;
   }
 
   function selectAllPrintCollections_() {
@@ -783,19 +801,20 @@
   function setPrintStatus_(id, printed) {
     var item = byId(id);
     if (!item) return;
-    google.script.run.withSuccessHandler(function (updated) {
-      clearPrintResult_();
+    writeData_('setPhrasePrinted', { id:id, printed:printed, expectedUpdated:item.updated }, function (updated) {
+      clearPrintResult_(true);
       var current = byId(updated.id);
       if (current) {
+        if (state.editing === updated.id && state.editingUpdated === current.updated) state.editingUpdated = updated.updated;
         current.printedAt = updated.printedAt;
         current.updated = updated.updated;
       }
       renderManageList();
       say(printed ? 'Frase marcada como incluida.' : 'Marca de material quitada.');
-    }).withFailureHandler(function (err) {
+    }, function (err) {
       renderManageList();
       say(err.message, 'err');
-    }).setPhrasePrinted({ id:id, printed:printed, expectedUpdated:item.updated });
+    });
   }
 
   function printPayload_() {
@@ -822,11 +841,11 @@
       if (revision !== state.printRevision) return;
       state.printPreviewLoading = false;
       state.printPreview = {body:result.body, includedCount:result.includedCount, rowCount:result.rowCount, name:result.name, signature:result.signature, phrases:result.phrases || []};
-      render();
+      renderPreservingDrafts_();
     }).withFailureHandler(function (err) {
       if (revision !== state.printRevision) return;
       state.printPreviewLoading = false;
-      render();
+      renderPreservingDrafts_();
       say(err.message, 'err');
     }).previewPhraseMaterial(printPayload_());
   }
@@ -855,7 +874,7 @@
     renderPrint();
     var method = format === 'html' ? 'generatePhraseHtml' : 'generatePhraseMarkdown';
     var mime = format === 'html' ? 'text/html;charset=utf-8' : 'text/markdown;charset=utf-8';
-    google.script.run.withSuccessHandler(function (result) {
+    writeData_(method, payload, function (result) {
       var useEditedBody = format === 'html' && editedBody !== null && revision === state.printRevision;
       var content = useEditedBody ? replaceMaterialBody_(result.content, editedBody) : result.content;
       var blob = new Blob([content], {type:mime});
@@ -870,16 +889,16 @@
       state.printGenerating = false;
       state.printPreview = format === 'html' && revision === state.printRevision ? {body:useEditedBody ? editedBody : result.body, includedCount:result.includedCount, rowCount:result.rowCount, name:result.name, signature:result.signature, phrases:result.phrases || []} : null;
       state.printResult = {url:url, name:result.name, includedCount:result.includedCount, rowCount:result.rowCount, markedAt:result.markedAt};
-      render();
+      renderPreservingDrafts_();
       reload(function () {
-        render();
+        renderPreservingDrafts_();
         say('Material descargado y frases marcadas.');
       }, true);
-    }).withFailureHandler(function (err) {
+    }, function (err) {
       state.printGenerating = false;
-      render();
+      renderPreservingDrafts_();
       say(err.message, 'err');
-    })[method](payload);
+    });
   }
 
   function collectionCatalogHtml() {
@@ -1043,7 +1062,7 @@
     draft.busy = true;
     draft.saving = true;
     renderGenerator();
-    google.script.run.withSuccessHandler(function (data) {
+    writeData_('saveGeneratedPhrases', { items:selected.map(function (item) { return { de:item.de, es:item.es, pronunciation:item.pronunciation || '', kana:item.kana || '' }; }), collectionIds:draft.collectionIds.slice(), expectedLanguageVersion:state.language.version }, function (data) {
       data.results.forEach(function (result, index) {
         var existing = byId(result.item.id);
         if (existing) state.items[state.items.indexOf(existing)] = result.item;
@@ -1062,12 +1081,12 @@
       // Conservá formularios y material editado; el backend valida la firma del material al descargar.
       if (state.view === 'generate') renderGenerator();
       say(draft.collectionIds.length ? 'Frases agregadas a las colecciones elegidas.' : 'Frases agregadas sin asignar colecciones nuevas.');
-    }).withFailureHandler(function (err) {
+    }, function (err) {
       draft.busy = false;
       draft.saving = false;
       if (state.view === 'generate') renderGenerator();
       say(err.message, 'err');
-    }).saveGeneratedPhrases({ items:selected.map(function (item) { return { de:item.de, es:item.es, pronunciation:item.pronunciation || '', kana:item.kana || '' }; }), collectionIds:draft.collectionIds.slice(), expectedLanguageVersion:state.language.version });
+    });
   }
 
   function renderEtymology() {
@@ -1105,7 +1124,7 @@
 
   function saveLanguageSettings_() {
     if (state.configSaving) return;
-    if (state.loadingData) return say('Esperá a que termine la actualización.', 'err');
+    if (state.loadingData || state.writingData) return say('Esperá a que termine la operación pendiente.', 'err');
     if (state.generator.busy) return say('Esperá a que termine la generación o el guardado.', 'err');
     if (state.printGenerating || state.printPreviewLoading || state.languageBusy) return say('Esperá a que terminen las operaciones pendientes.', 'err');
     var selected = LANGUAGES.find(function (language) { return language.locale === state.languageChoice; });
@@ -1124,7 +1143,7 @@
       state.setup = null;
       if (changed) { state.etymologyResult = ''; state.generator.items = []; state.generator.generatedLevel = null; state.generator.generatedLanguageVersion = null; state.importPreview = null; }
       languageDraft_(savedLanguage);
-      reload(function () { render(); say('Idiomas guardados.'); });
+      reload(function () { renderPreservingDrafts_(); say('Idiomas guardados.'); });
     }).withFailureHandler(function (err) {
       state.configSaving = false;
       renderSettings();
@@ -1151,62 +1170,117 @@
     if (state.view === 'practice') renderPractice(); else if (state.view === 'collections') renderCollections(); else if (state.view === 'manage') renderManage(); else if (state.view === 'print') renderPrint(); else if (state.view === 'generate') renderGenerator(); else if (state.view === 'settings') renderSettings(); else renderEtymology();
   }
 
+  function editorDraft_() {
+    var values = {};
+    ['f-de', 'f-es', 'f-pronunciation', 'f-kana', 'f-notes', 'f-tags', 'collection-name'].forEach(function (id) {
+      var field = document.getElementById(id);
+      if (field) values[id] = field.value;
+    });
+    var warning = document.getElementById('f-pronunciation-warning');
+    return {values:values, collectionIds:Array.prototype.map.call(document.querySelectorAll('input[name="phrase-collection"]:checked'), function (input) { return input.value; }),
+      review:warning && Object.assign({}, warning.pronunciationNeedsReview)};
+  }
+
+  function renderPreservingDrafts_() {
+    var draft = editorDraft_();
+    var focused = document.activeElement;
+    var selection = focused && [focused.selectionStart, focused.selectionEnd];
+    capturePrintPreview_();
+    render();
+    Object.keys(draft.values).forEach(function (id) {
+      var field = document.getElementById(id);
+      if (field) field.value = draft.values[id];
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="phrase-collection"]'), function (input) { input.checked = draft.collectionIds.indexOf(input.value) !== -1; });
+    var warning = document.getElementById('f-pronunciation-warning');
+    if (warning && draft.review) {
+      warning.pronunciationNeedsReview = draft.review;
+      warning.hidden = !draft.review.pronunciation && !draft.review.kana;
+    }
+    var field = focused && Object.prototype.hasOwnProperty.call(draft.values, focused.id) && document.getElementById(focused.id);
+    if (field) { field.focus({preventScroll:true}); field.setSelectionRange(selection[0], selection[1]); }
+  }
+
+  function writeData_(method, payload, success, failure) {
+    failure = failure || function (err) { say(err.message, 'err'); };
+    if (state.loadingData || state.writingData || state.configSaving) return failure({message:'Esperá a que termine la operación pendiente.'});
+    state.writingData = true;
+    google.script.run.withSuccessHandler(function (result) {
+      state.writingData = false;
+      success(result);
+    }).withFailureHandler(function (err) {
+      state.writingData = false;
+      failure(err);
+    })[method](payload);
+  }
+
   function saveCollection() {
-    var name = document.getElementById('collection-name').value;
+    var input = document.getElementById('collection-name');
+    var name = input.value;
     if (!name.trim()) return say('Escribí un nombre para la colección.', 'err');
     var isNew = state.collectionEditor === 'new';
-    google.script.run.withSuccessHandler(function (collection) {
-      clearPrintResult_();
+    var editorSession = state.collectionEditorSession;
+    writeData_(isNew ? 'createCollection' : 'renameCollection', { id:state.collectionId, name:name }, function (collection) {
+      clearPrintResult_(true);
       if (isNew) {
         state.collections.push(collection);
         state.memberIdsByCollection[collectionKey_(collection.id)] = [];
-      } else collectionById_(collection.id).name = collection.name;
-      state.collectionEditor = null;
-      state.collectionId = null;
+      } else {
+        var current = collectionById_(collection.id);
+        if (current) current.name = collection.name;
+      }
+      if (state.collectionEditorSession === editorSession && state.collectionEditor) {
+        var currentInput = document.getElementById('collection-name');
+        state.collectionEditor = currentInput && currentInput.value !== name ? collection.id : null;
+        state.collectionId = state.collectionEditor;
+      }
       decorateCollections_();
-      render();
+      renderPreservingDrafts_();
       say(isNew ? 'Colección creada.' : 'Nombre guardado.');
-    }).withFailureHandler(function (err) { say(err.message, 'err'); })[isNew ? 'createCollection' : 'renameCollection']({ id:state.collectionId, name:name });
+    });
   }
 
   function deleteCurrentCollection(id) {
     var collection = collectionById_(id);
     if (!collection || collection.unassigned || !confirm('Borrar la colección "' + collection.name + '"? Las frases se conservan.')) return;
-    google.script.run.withSuccessHandler(function () {
-      clearPrintResult_();
+    writeData_('deleteCollection', collection.id, function () {
+      clearPrintResult_(true);
       delete state.memberIdsByCollection[collectionKey_(collection.id)];
       state.collections = state.collections.filter(function (item) { return item.id !== collection.id; });
       state.printCollectionIds = state.printCollectionIds.filter(function (id) { return collectionKey_(id) !== collectionKey_(collection.id); });
       decorateCollections_();
-      render();
+      renderPreservingDrafts_();
       say('Colección borrada.');
-    }).withFailureHandler(function (err) { say(err.message, 'err'); }).deleteCollection(collection.id);
+    });
   }
 
   function savePhrase() {
     if (state.languageBusy) return say('Esperá a que termine la operación pendiente.', 'err');
     var id = state.editing || '';
-    var collectionIds = Array.prototype.map.call(
-      document.querySelectorAll('input[name="phrase-collection"]:checked'), function (input) { return input.value; }
-    );
+    var editorSession = state.phraseEditorSession, draft = editorDraft_();
+    var collectionIds = draft.collectionIds;
     var payload = { id:id, de:document.getElementById('f-de').value, es:document.getElementById('f-es').value,
       pronunciation:document.getElementById('f-pronunciation').value,
       kana:japanese_() ? document.getElementById('f-kana').value : (id && byId(id) ? byId(id).kana || '' : ''), expectedLanguageVersion:state.language.version,
       notes:document.getElementById('f-notes').value, tags:document.getElementById('f-tags').value,
-      expectedUpdated:id && byId(id) ? byId(id).updated : '', expectedCollectionIds:id ? (state.editingCollectionIds || []) : [], collectionIds:collectionIds };
+      expectedUpdated:state.editingUpdated, expectedCollectionIds:id ? (state.editingCollectionIds || []) : [], collectionIds:collectionIds };
     if (!payload.de.trim()) return say('Escribí la frase en ' + targetName_() + ' antes de guardar.', 'err');
     state.languageBusy++;
-    google.script.run.withSuccessHandler(function (result) {
+    writeData_('savePhrase', payload, function (result) {
       state.languageBusy--;
-      clearPrintResult_();
+      clearPrintResult_(true);
       var item = result.item;
       if (id) state.items[state.items.indexOf(byId(id))] = item; else state.items.unshift(item);
       setPhraseCollectionIds_(item.id, result.collectionIds);
       decorateCollections_();
-      state.editing = null; state.editingCollectionIds = null;
-      render();
+      if (state.phraseEditorSession === editorSession && state.editing !== null && state.view === 'manage') {
+        state.editing = JSON.stringify(editorDraft_()) === JSON.stringify(draft) ? null : item.id;
+        state.editingCollectionIds = result.collectionIds;
+        state.editingUpdated = item.updated;
+      }
+      renderPreservingDrafts_();
       say(id ? 'Cambios guardados.' : 'Frase agregada.');
-    }).withFailureHandler(function (err) { state.languageBusy--; say(err.message, 'err'); }).savePhrase(payload);
+    }, function (err) { state.languageBusy--; say(err.message, 'err'); });
   }
 
   function originalChanged_(index) {
@@ -1315,7 +1389,7 @@
     var source = document.getElementById('etymology-source');
     var button = document.getElementById('ai-etymology');
     var result = document.getElementById('ai-etymology-result');
-    if (!source || !button || !result) return;
+    if (!source || !button || !result || button.disabled) return;
     if (!source.value.trim()) return say('Escribí la palabra o frase antes de analizarla.', 'err');
     state.etymologyText = source.value;
     state.etymologyResult = '';
@@ -1325,19 +1399,20 @@
     result.textContent = 'Analizando etimología…';
     state.languageBusy++;
     var languageVersion = state.language.version;
+    var input = source.value, request = ++state.etymologyRequest;
     google.script.run.withSuccessHandler(function (text) {
       state.languageBusy--;
-      if (languageVersion !== state.language.version) return;
-      state.etymologyResult = text;
-      if (document.body.contains(result)) result.textContent = text;
       restoreAiButton(button, 'Analizar etimología');
+      if (request !== state.etymologyRequest || input !== state.etymologyText || languageVersion !== state.language.version) return;
+      state.etymologyResult = text;
+      var current = document.getElementById('ai-etymology-result');
+      if (current) { current.hidden = false; current.textContent = text; }
     }).withFailureHandler(function (err) {
       state.languageBusy--;
-      if (document.body.contains(result)) {
-        result.hidden = true;
-        result.textContent = '';
-      }
       restoreAiButton(button, 'Analizar etimología');
+      if (request !== state.etymologyRequest || input !== state.etymologyText || languageVersion !== state.language.version) return;
+      var current = document.getElementById('ai-etymology-result');
+      if (current) { current.hidden = true; current.textContent = ''; }
       say(err.message, 'err');
     }).analyzeEtymology(source.value, languageVersion);
   }
@@ -1345,17 +1420,17 @@
   function removePhrase(id) {
     var item = byId(id);
     if (!item || !confirm('Borrar ' + id + '? Se elimina la fila de la hoja.')) return;
-    google.script.run.withSuccessHandler(function () {
-      clearPrintResult_();
+    writeData_('deletePhrase', { id:id, expectedUpdated:item.updated }, function () {
+      clearPrintResult_(true);
       state.items = state.items.filter(function (item) { return item.id !== id; });
       Object.keys(state.memberIdsByCollection).forEach(function (key) {
         state.memberIdsByCollection[key] = state.memberIdsByCollection[key].filter(function (phraseId) { return phraseId !== id; });
       });
       decorateCollections_();
       if (state.editing === id) { state.editing = null; state.editingCollectionIds = null; }
-      render();
+      renderPreservingDrafts_();
       say('Frase ' + id + ' borrada.');
-    }).withFailureHandler(function (err) { say(err.message, 'err'); }).deletePhrase({ id:id, expectedUpdated:item.updated });
+    });
   }
 
   function importSettings() {
@@ -1371,10 +1446,11 @@
     state.importDelimiter = settings.delimiter;
     state.importOpen = true;
     google.script.run.withSuccessHandler(function (data) {
+      if (settings.text !== state.importText || settings.delimiter !== state.importDelimiter) return;
       if (!data.columnCount) return say('No se encontraron columnas para importar.', 'err');
       state.importPreview = { data:data, text:settings.text, delimiter:settings.delimiter };
       state.importColumns = {de:0, es:data.columnCount > 1 ? 1 : 0, pronunciation:-1, kana:-1};
-      render();
+      renderPreservingDrafts_();
     }).withFailureHandler(function (err) { say(err.message, 'err'); }).previewImport(settings.text, settings.delimiter);
   }
 
@@ -1387,24 +1463,27 @@
     var payload = { text:settings.text, delimiter:settings.delimiter, hasHeader:settings.hasHeader, expectedLanguageVersion:state.language.version,
       deColumn:Number(document.getElementById('import-de').value), esColumn:Number(document.getElementById('import-es').value),
       pronunciationColumn:Number(document.getElementById('import-pronunciation').value), kanaColumn:Number(document.getElementById('import-kana').value) };
+    var draft = JSON.stringify([state.importText, state.importDelimiter, state.importHasHeader, state.importColumns]);
     state.languageBusy++;
-    google.script.run.withSuccessHandler(function (result) {
+    writeData_('importPhrases', payload, function (result) {
       state.languageBusy--;
-      state.importText = '';
-      state.importPreview = null;
-      state.importOpen = false;
-      state.importHasHeader = true;
-      state.importDelimiter = ',';
-      clearPrintResult_();
+      if (draft === JSON.stringify([state.importText, state.importDelimiter, state.importHasHeader, state.importColumns])) {
+        state.importText = '';
+        state.importPreview = null;
+        state.importOpen = false;
+        state.importHasHeader = true;
+        state.importDelimiter = ',';
+      }
+      clearPrintResult_(true);
       state.items = (result.items || []).concat(state.items);
       decorateCollections_();
-      render();
+      renderPreservingDrafts_();
       say(result.imported + ' importadas; ' + result.duplicate + ' duplicadas y ' + result.empty + ' vacías omitidas.');
-    }).withFailureHandler(function (err) { state.languageBusy--; say(err.message, 'err'); }).importPhrases(payload);
+    }, function (err) { state.languageBusy--; say(err.message, 'err'); });
   }
 
   function reload(done, preservePrint) {
-    if (state.generator.saving || state.printPreviewSaving) return say('Esperá a que termine el guardado antes de actualizar.', 'err');
+    if (state.writingData || state.configSaving) return say('Esperá a que termine el guardado antes de actualizar.', 'err');
     if (state.loadingData) return;
     state.loadingData = true;
     google.script.run.withSuccessHandler(function (data) {
@@ -1415,8 +1494,8 @@
         return render();
       }
       applyAppData_(data);
-      if (!preservePrint) clearPrintResult_();
-      if (done) done(); else render();
+      if (!preservePrint) clearPrintResult_(true);
+      if (done) done(); else renderPreservingDrafts_();
     }).withFailureHandler(function (err) {
       state.loadingData = false;
       say(err.message, 'err');
@@ -1450,7 +1529,7 @@
       if (state.view === 'print') capturePrintPreview_();
       say('Actualizando datos…');
       return reload(function () {
-        render();
+        renderPreservingDrafts_();
         say('Datos actualizados.');
       });
     }
@@ -1468,8 +1547,8 @@
       state.editingCollectionIds = null;
       return render();
     }
-    if (act === 'new-collection') { state.collectionId = null; state.collectionEditor = 'new'; return render(); }
-    if (act === 'edit-collection') { state.collectionId = button.dataset.id; state.collectionEditor = state.collectionId; return render(); }
+    if (act === 'new-collection') { state.collectionEditorSession++; state.collectionId = null; state.collectionEditor = 'new'; return render(); }
+    if (act === 'edit-collection') { state.collectionEditorSession++; state.collectionId = button.dataset.id; state.collectionEditor = state.collectionId; return render(); }
     if (act === 'cancel-collection-editor') { state.collectionEditor = null; state.collectionId = null; return render(); }
     if (act === 'save-collection') return saveCollection();
     if (act === 'delete-collection') return deleteCurrentCollection(button.dataset.id);
@@ -1494,8 +1573,8 @@
       document.getElementById(button.dataset.list + '-collection-summary').textContent = collectionFilterLabel_([]);
       return button.dataset.list === 'manage' ? renderManageList() : renderPracticeList();
     }
-    if (act === 'new') { state.editing = ''; state.editingCollectionIds = []; return render(); }
-    if (act === 'edit') { state.view = 'manage'; state.editing = button.dataset.id; state.editingCollectionIds = collectionIdsForPhrase_(state.editing); return render(); }
+    if (act === 'new') { state.phraseEditorSession++; state.editing = ''; state.editingCollectionIds = []; state.editingUpdated = ''; return render(); }
+    if (act === 'edit') { state.phraseEditorSession++; state.view = 'manage'; state.editing = button.dataset.id; state.editingCollectionIds = collectionIdsForPhrase_(state.editing); state.editingUpdated = byId(state.editing).updated; return render(); }
     if (act === 'cancel-editor') { state.editing = null; state.editingCollectionIds = null; return render(); }
     if (act === 'save-phrase') return savePhrase();
     if (act === 'translate') return translateToGerman();
@@ -1531,7 +1610,11 @@
     else if (event.target.id === 'manage-search') { state.manageQuery = event.target.value; state.managePage = 1; renderManageList(); }
     else if (event.target.id === 'practice-search') { state.session.query = event.target.value; refreshPractice_(); renderPracticeList(); }
     else if (event.target.id === 'import-text') state.importText = event.target.value;
-    else if (event.target.id === 'etymology-source') state.etymologyText = event.target.value;
+    else if (event.target.id === 'etymology-source') {
+      state.etymologyText = event.target.value; state.etymologyResult = '';
+      var result = document.getElementById('ai-etymology-result');
+      result.hidden = true; result.textContent = '';
+    }
     else if (event.target.id === 'collection-search') {
       var collectionCursor = event.target.selectionStart;
       state.collectionQuery = event.target.value;

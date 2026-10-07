@@ -103,6 +103,7 @@ function generatorClient() {
   const methods = Function('state', 'google', 'confirm', `
     function renderGenerator() { rendered(); }
     function render() { rendered(); }
+    function renderPreservingDrafts_() { render(); }
     function say() {}
     function byId(id) { return state.items.find(item => item.id === id); }
     function setPhraseCollectionIds_() {}
@@ -111,6 +112,7 @@ function generatorClient() {
     function targetName_() { return 'alemán'; }
     function translationName_() { return 'español'; }
     function applyAppData_(data) { state.items = data.items; }
+    ${between(html, '  function writeData_(', '  function saveCollection()')}
     ${between(html, '  function generatePhrases_()', '  function renderEtymology()')}
     ${between(html, '  function reload(done, preservePrint)', '\n\n  el.app.addEventListener')}
     return {generatePhrases_, saveGeneratedPhrases_, reload};

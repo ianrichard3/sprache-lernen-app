@@ -13,6 +13,7 @@ Object.defineProperty(window,'speechSynthesis',{get(){throw Error('Audio must no
 var copied = '';
 Object.defineProperty(navigator,'clipboard',{value:{writeText(text){copied=text;return Promise.resolve();}}});
 var calls = [], pendingSave, deferSave = false, failSave = false, deferredTranslation, deferredPronunciation;
+var deferWrites=false, pendingWrites=[], pendingEtymologies=[], deferLoad=false, pendingLoad, nextCollectionId=3;
 var snapshot = {language:{name:'japonés',locale:'ja-JP',translation:{name:'inglés',locale:'en-US'},version:1},
  items:[{id:'F1',de:'今日はコーヒーを飲みます。',es:'I will drink coffee today.',kana:'きょうはコーヒーをのみます。',pronunciation:'Kyō wa kōhī o nomimasu.',notes:'',tags:[],updated:'initial',printedAt:'printed'},
  {id:'F2',de:'ありがとう。',es:'Thank you.',kana:'',pronunciation:'',notes:'',tags:[],updated:'initial2',printedAt:''}],
@@ -40,15 +41,33 @@ window.google={script:{get run() {
   if(key==='withFailureHandler') return function(fn){failure=fn;return this;};
   return function(payload,version,field) {
    calls.push([key,payload,version,field]);
+   if(deferWrites && ['createCollection','savePhrase','saveGeneratedPhrases'].includes(key)) {
+    var reply=success;success=value=>pendingWrites.push(()=>reply(structuredClone(value)));
+   }
+   if(key==='analyzeEtymology') {pendingEtymologies.push(success);return;}
    if(key==='suggestGermanTranslation'||key==='suggestSpanishTranslation') {deferredTranslation=success;return;}
    if(key==='suggestPronunciation') {deferredPronunciation=success;return;}
    if(key==='generatePhrases') return success(Array.from({length:10},()=>({de:snapshot.items[0].de,es:snapshot.items[0].es})));
    if(key==='previewImport') return success({columnCount:2,rows:[['Original','Translation']]});
    if(key==='importPhrases') return failure({message:'Import failed'});
-   if(key==='createCollection') {var collection={id:'C3',name:payload.name,count:0};snapshot.collections.push(collection);snapshot.memberIdsByCollection.C3=[];return success(collection);}
+   if(key==='createCollection') {var collection={id:'C'+nextCollectionId++,name:payload.name,count:0};snapshot.collections.push(collection);snapshot.memberIdsByCollection[collection.id]=[];return success(collection);}
    if(key==='renameCollection') {var collection=snapshot.collections.find(item=>item.id===payload.id);collection.name=payload.name;return success({...collection});}
    if(key==='deleteCollection') {snapshot.collections=snapshot.collections.filter(item=>item.id!==payload);delete snapshot.memberIdsByCollection[payload];return success({id:payload});}
-   if(key==='loadAppData') return success(structuredClone(snapshot));
+   if(key==='loadAppData') {if(deferLoad){pendingLoad=()=>success(structuredClone(snapshot));return;}return success(structuredClone(snapshot));}
+   if(key==='savePhrase') {
+    var item=snapshot.items.find(item=>item.id===payload.id);
+    if(!item){item={id:'F'+(snapshot.items.length+1),printedAt:''};snapshot.items.unshift(item);}
+    Object.assign(item,{de:payload.de,es:payload.es,kana:payload.kana,pronunciation:payload.pronunciation,notes:payload.notes,tags:payload.tags.split(',').filter(Boolean),updated:'saved-'+calls.length});
+    Object.entries(snapshot.memberIdsByCollection).forEach(([id,ids])=>{snapshot.memberIdsByCollection[id]=ids.filter(id=>id!==item.id);if(payload.collectionIds.includes(id))snapshot.memberIdsByCollection[id].push(item.id);});
+    return success({item,collectionIds:payload.collectionIds});
+   }
+   if(key==='saveGeneratedPhrases') {
+    var results=payload.items.map(value=>{
+     var item={...value,id:'F'+(snapshot.items.length+1),notes:'',tags:[],updated:'generated',printedAt:''};snapshot.items.unshift(item);
+     payload.collectionIds.forEach(id=>snapshot.memberIdsByCollection[id].push(item.id));
+     return {item,collectionIds:payload.collectionIds,reused:false};
+    });return success({results});
+   }
    if(key==='previewPhraseMaterial') return success(materialResult());
    if(key==='generatePhraseHtml') {
     snapshot.items.forEach(item=>{item.printedAt='printed';item.updated+='!';});
@@ -77,6 +96,7 @@ const smoke = String.raw`<script>
  function check(value,message){if(!value)throw Error(message);count++;}
  function node(selector){var result=document.querySelector(selector);check(!!result,selector);return result;}
  function click(selector){node(selector).click();}
+ function input(selector,value){var field=node(selector);field.value=value;field.dispatchEvent(new Event('input',{bubbles:true}));}
  function edit(selector,value){var field=node(selector);field.textContent=value;field.dispatchEvent(new Event('input',{bubbles:true}));}
  function aids(field){return '#print-preview-content [data-phrase-id="F1"][data-pronunciation-field="'+field+'"]';}
  function saves(){return calls.filter(call=>call[0]==='saveMaterialPronunciations').length;}
@@ -244,6 +264,55 @@ const smoke = String.raw`<script>
   click('[data-view="settings"]');click('[data-view="tools"]');
   check(node('#generator-context').value==='Coffee'&&node('#generated-kana-0').value===furigana,'tools reopen last tool with drafts');
   check(document.documentElement.scrollWidth<=window.innerWidth,'layout fits viewport');
+  // Delayed metadata and phrase saves preserve a different editor, selections and focus.
+  click('[data-view="collections"]');click('[data-act="new-collection"]');input('#collection-name','Pending collection');
+  deferWrites=true;click('[data-act="save-collection"]');
+  var loads=calls.filter(call=>call[0]==='loadAppData').length;
+  click('[data-act="refresh-data"]');check(calls.filter(call=>call[0]==='loadAppData').length===loads,'refresh cannot overlap metadata write');
+  click('[data-view="manage"]');click('[data-act="clear-phrase-filter"][data-list="manage"]');click('[data-act="new"]');input('#f-de','Draft survives');input('#f-es','Draft translation');
+  click('input[name="phrase-collection"][value="C2"]');node('#f-de').focus();node('#f-de').setSelectionRange(2,5);
+  pendingWrites.shift()();
+  check(node('#f-de').value==='Draft survives'&&node('#f-es').value==='Draft translation','late metadata reply preserves phrase fields');
+  check(node('input[name="phrase-collection"][value="C2"]').checked,'late reply preserves collection choices');
+  check(document.activeElement.id==='f-de'&&node('#f-de').selectionStart===2&&node('#f-de').selectionEnd===5,'late reply preserves editor focus and selection');
+  click('[data-act="save-phrase"]');click('[data-act="edit"][data-id="F2"]');input('#f-de','Different phrase draft');
+  pendingWrites.shift()();check(node('#f-de').value==='Different phrase draft','late phrase save preserves different editor');deferWrites=false;
+  // A pending snapshot cannot overlap a write; refresh keeps draft text and version checks.
+  deferLoad=true;click('[data-act="refresh-data"]');
+  var phraseSaves=calls.filter(call=>call[0]==='savePhrase').length;
+  click('[data-act="save-phrase"]');check(calls.filter(call=>call[0]==='savePhrase').length===phraseSaves,'write cannot overlap snapshot');
+  pendingLoad();deferLoad=false;check(node('#f-de').value==='Different phrase draft','snapshot preserves edited text');click('[data-act="cancel-editor"]');
+  // Unrelated metadata callbacks keep the current file-only material edits.
+  click('[data-view="collections"]');click('[data-act="new-collection"]');input('#collection-name','Material callback');
+  deferWrites=true;click('[data-act="save-collection"]');click('[data-view="print"]');
+  edit('#print-preview-content tr[data-phrase-id="F1"] td:first-child','Material survives another save');
+  pendingWrites.shift()();deferWrites=false;
+  check(node('#print-preview-content tr[data-phrase-id="F1"] td:first-child').textContent==='Material survives another save','late metadata reply preserves file-only material edits');
+  click('[data-act="preview-material"]');
+  check(node('#print-preview-content tr[data-phrase-id="F1"] td:first-child').textContent===snapshot.items.find(item=>item.id==='F1').de,'explicit preview refresh replaces the previous material body');
+  // Background generation preserves the practice page, row reveals and existing random order.
+  click('[data-view="generate"]');input('#generated-de-0','Brot & Butter < 5');click('[data-generator-select="0"]');
+  deferWrites=true;click('[data-act="save-generated"]');click('[data-view="practice"]');input('#practice-search','');
+  var order=node('#session-order');order.value='random';order.dispatchEvent(new Event('change',{bubbles:true}));
+  click('[data-act="page"][data-list="practice"][data-direction="1"]');
+  var beforeRows=Array.from(document.querySelectorAll('.session-choice'),row=>row.dataset.id).join(',');
+  var revealed=node('.session-choice').dataset.id;click('[data-act="reveal-practice"][data-id="'+revealed+'"]');
+  pendingWrites.shift()();deferWrites=false;
+  check(node('.pagination .muted').textContent.includes('Página 2'),'background save preserves practice page');
+  check(Array.from(document.querySelectorAll('.session-choice'),row=>row.dataset.id).join(',')===beforeRows,'background save preserves existing random order');
+  check(node('[data-act="reveal-practice"][data-id="'+revealed+'"]').classList.contains('revealed'),'background save preserves revealed rows');
+  click('[data-act="copy-session-ssml"]');await Promise.resolve();
+  var parsed=new DOMParser().parseFromString('<speak>'+copied+'</speak>','application/xml');
+  check(!parsed.querySelector('parsererror'),'SSML remains valid XML for literal ampersands and angle brackets');
+  check(parsed.documentElement.textContent.includes('Brot & Butter < 5'),'SSML retains original spoken text');
+  // Out-of-order etymology replies never attach an old explanation to a new query.
+  click('[data-view="etymology"]');input('#etymology-source','Haus');click('[data-act="etymology"]');
+  click('[data-view="manage"]');click('[data-view="etymology"]');input('#etymology-source','Baum');click('[data-act="etymology"]');
+  pendingEtymologies[1]('Result for Baum');pendingEtymologies[0]('Result for Haus');
+  check(node('#ai-etymology-result').textContent==='Result for Baum','latest explanation stays visible');
+  click('[data-view="manage"]');click('[data-view="etymology"]');
+  check(node('#etymology-source').value==='Baum'&&node('#ai-etymology-result').textContent==='Result for Baum','latest explanation stays paired with its query after navigation');
+  check(document.documentElement.scrollWidth<=window.innerWidth,'race checks fit viewport');
   await fetch('/result' ,{method:'POST',body:JSON.stringify({count})});
  } catch(error) {await fetch('/result',{method:'POST',body:JSON.stringify({count,error:error.message+"\n"+error.stack})});}
 }());

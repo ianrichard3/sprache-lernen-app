@@ -82,6 +82,8 @@ function generatorBackend() {
   const memberRows = [['C1', 'F0001', 1]];
   let failLinks = false;
   let failRecovery = false;
+  let locked = false;
+  const lock = {waitLock() { locked = true; }, releaseLock() { locked = false; }};
   function sheet(rows, member = false) {
     return {
       getLastRow() { return rows.length + 1; },
@@ -89,7 +91,7 @@ function generatorBackend() {
       getRangeList(ranges) { return {clearContent() { ranges.forEach(range => { rows[Number(range.match(/\d+/)[0]) - 2] = ['', '', '']; }); }}; },
       getRange(start, column, count, width) {
         return {
-          getValues() { return rows.slice(start - 2, start - 2 + count).map(row => row.slice(0, width)); },
+          getValues() { assert.ok(locked, 'Snapshots and writes must read Sheets under the same lock'); return rows.slice(start - 2, start - 2 + count).map(row => row.slice(0, width)); },
           setValues(values) {
             values.forEach((row, i) => { rows[start - 2 + i] = row.slice(); });
             if (member && failLinks) throw new Error('Write failed');
@@ -105,7 +107,7 @@ function generatorBackend() {
   const phraseSheet = sheet(phraseRows);
   const memberSheet = sheet(memberRows, true);
   const collectionSheet = sheet([['C1', 'Uno', '', ''], ['C2', 'Dos', '', '']]);
-  const run = Function('phraseSheet', 'memberSheet', 'collectionSheet', `
+  const run = Function('phraseSheet', 'memberSheet', 'collectionSheet', 'lock', `
     const PRODUCTION_SPREADSHEET_ID = 'test';
     const PropertiesService = {getDocumentProperties: () => ({getProperty: () => '1', setProperty: () => {}}), getScriptProperties: () => ({getProperty: () => null})};
     ${code}
@@ -113,9 +115,9 @@ function generatorBackend() {
     getSheet_ = () => phraseSheet;
     getCollectionsSheet_ = () => collectionSheet;
     getCollectionMembersSheet_ = () => memberSheet;
-    const LockService = {getDocumentLock: () => null, getScriptLock: () => ({waitLock() {}, releaseLock() {}})};
+    const LockService = {getDocumentLock: () => null, getScriptLock: () => lock};
     return {saveGeneratedPhrases, savePhrase, createCollection, renameCollection, deleteCollection, loadAppData, deletePhrase};
-  `)(phraseSheet, memberSheet, collectionSheet);
+  `)(phraseSheet, memberSheet, collectionSheet, lock);
   return {api:run, run:run.saveGeneratedPhrases, phraseRows, memberRows, fail(rollback = false) { failLinks = true; failRecovery = rollback; }};
 }
 const generated = generatorBackend();
