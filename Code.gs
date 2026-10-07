@@ -7,8 +7,6 @@
  * A: ID | B: Frase objetivo | C: Traducción | D: Notas | E: Estado | F: Etiquetas
  * G: Creado | H: Actualizado | I: Incluida en material | J: Pronunciación | K: Kanji con furigana
  *
- * Hoja "Historial": ID | Resultado | Estudiado
- *
  * Regla de rendimiento: toda operación cuesta UNA lectura y UNA escritura.
  * El formato de la hoja se aplica sólo en setupSheet(), nunca al leer o guardar.
  */
@@ -16,7 +14,6 @@
 const SHEET_NAME = 'Frases';
 const SPREADSHEET_ID_PROPERTY = 'APP_SPREADSHEET_ID';
 const LANGUAGE_PROPERTY = 'APP_TARGET_LANGUAGE';
-const HISTORY_SHEET_NAME = 'Historial';
 const COLLECTION_SHEET_NAME = 'Colecciones';
 const COLLECTION_HEADERS = ['ID', 'Nombre', 'Creado', 'Actualizado'];
 const COLLECTION_COL = { ID: 1, NAME: 2, CREATED: 3, UPDATED: 4 };
@@ -30,10 +27,6 @@ const UNASSIGNED_COLLECTION_ID = '__unassigned__';
 const ALL_COLLECTION_NAME = 'Todas';
 const ALL_PRINT_SCOPE = 'all';
 const COLLECTION_PRINT_SCOPE = 'collections';
-const HISTORY_HEADERS = ['ID', 'Resultado', 'Estudiado'];
-const HISTORY_COL = { ID: 1, RESULT: 2, REVIEWED_AT: 3 };
-const HISTORY_WIDTH = HISTORY_HEADERS.length;
-const HISTORY_LIMIT = 20;
 
 const HEADERS = [
   'ID', 'Frase objetivo', 'Traducción', 'Notas', 'Estado', 'Etiquetas', 'Creado', 'Actualizado', 'Incluida en material', 'Pronunciación', 'Kanji con furigana'
@@ -197,21 +190,6 @@ function getSheet_(ss) {
   const sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) return buildSheet_(ss.insertSheet(SHEET_NAME));
   return ensurePhraseColumns_(sheet);
-}
-
-function getHistorySheet_(ss) {
-  ss = ss || getSpreadsheet_();
-  const existing = ss.getSheetByName(HISTORY_SHEET_NAME);
-  if (existing) return existing;
-
-  const sheet = ss.insertSheet(HISTORY_SHEET_NAME);
-  sheet.getRange(1, 1, 1, HISTORY_WIDTH)
-    .setValues([HISTORY_HEADERS])
-    .setFontWeight('bold');
-  sheet.setFrozenRows(1);
-  sheet.getRange(2, HISTORY_COL.REVIEWED_AT, sheet.getMaxRows() - 1, 1)
-    .setNumberFormat('yyyy-mm-dd hh:mm');
-  return sheet;
 }
 
 function getCollectionsSheet_(ss) {
@@ -442,11 +420,6 @@ function toIso_(value) {
   return value instanceof Date ? value.toISOString() : '';
 }
 
-function timeOf_(value) {
-  const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
-  return isFinite(time) ? time : 0;
-}
-
 function withLock_(callback) {
   // La web app no tiene contexto de documento; todas las escrituras comparten este lock.
   const lock = LockService.getScriptLock();
@@ -627,59 +600,10 @@ function loadAppData() {
   return {
     language: targetLanguage_(),
     items: data.phrases.items.sort(function (a, b) { return b.id.localeCompare(a.id); }),
-    history: historyEntries_(getHistorySheet_(ss)).map(historyToObject_),
     collections: [{ id: UNASSIGNED_COLLECTION_ID, name: 'Sin colección', count: unassignedCount, unassigned: true }]
       .concat(collections),
     memberIdsByCollection: memberIdsByCollection
   };
-}
-
-function collectionMemberEntries_(table, collectionId) {
-  const key = collectionIdKey_(collectionId);
-  const seen = {};
-  const entries = [];
-
-  table.values.forEach(function (row, index) {
-    const phraseId = normalize_(row[COLLECTION_MEMBER_COL.PHRASE_ID - 1]);
-    const phraseKey = collectionIdKey_(phraseId);
-    if (collectionIdKey_(row[COLLECTION_MEMBER_COL.COLLECTION_ID - 1]) !== key || !phraseId || seen[phraseKey]) return;
-    seen[phraseKey] = true;
-    const position = Number(row[COLLECTION_MEMBER_COL.POSITION - 1]);
-    entries.push({
-      id: phraseId,
-      rowIndex: index + 2,
-      position: isFinite(position) && position > 0 ? position : Number.MAX_SAFE_INTEGER,
-      sourceIndex: index
-    });
-  });
-
-  return entries.sort(function (a, b) { return a.position - b.position || a.sourceIndex - b.sourceIndex; });
-}
-
-function collectionMemberIds_(table, collectionId) {
-  return collectionMemberEntries_(table, collectionId).map(function (entry) { return entry.id; });
-}
-
-function nextCollectionPosition_(table, collectionId) {
-  const key = collectionIdKey_(collectionId);
-  return table.values.reduce(function (highest, row) {
-    if (collectionIdKey_(row[COLLECTION_MEMBER_COL.COLLECTION_ID - 1]) !== key) return highest;
-    const position = Number(row[COLLECTION_MEMBER_COL.POSITION - 1]);
-    return Math.max(highest, isFinite(position) && position > 0 ? position : 0);
-  }, 0) + 1;
-}
-
-function reindexCollectionMemberEntries_(sheet, entries) {
-  if (!entries.length) return;
-  const firstRow = Math.min.apply(null, entries.map(function (entry) { return entry.rowIndex; }));
-  const lastRow = Math.max.apply(null, entries.map(function (entry) { return entry.rowIndex; }));
-  const range = sheet.getRange(firstRow, COLLECTION_MEMBER_COL.POSITION, lastRow - firstRow + 1, 1);
-  const positions = range.getValues();
-  entries.forEach(function (entry, index) {
-    entry.position = index + 1;
-    positions[entry.rowIndex - firstRow][0] = entry.position;
-  });
-  range.setValues(positions);
 }
 
 function clearCollectionMembers_(sheet, table, predicate) {
@@ -806,119 +730,6 @@ function deleteCollection(id) {
     });
     sheet.deleteRow(collection.rowIndex);
     return { id: collection.id };
-  });
-}
-
-function addCollectionPhrases(payload) {
-  const collectionId = normalize_(payload && payload.collectionId);
-  const requestedIds = Array.isArray(payload && payload.phraseIds) ? payload.phraseIds : [];
-  if (!collectionId || isUnassignedCollection_(collectionId)) throw new Error('Elegí una colección válida.');
-
-  return withLock_(function () {
-    const ss = getSpreadsheet_();
-    const collections = collectionRows_(readTable_(getCollectionsSheet_(ss), COLLECTION_WIDTH));
-    const collection = collections.byId[collectionIdKey_(collectionId)];
-    if (!collection) throw new Error('No existe la colección ' + collectionId + '.');
-
-    const phrases = phraseRows_(readTable_(getSheet_(ss)));
-    const seen = {};
-    const phraseIds = [];
-    requestedIds.forEach(function (id) {
-      const key = collectionIdKey_(id);
-      if (!key || seen[key]) return;
-      if (!phrases.byId[key]) throw new Error('No existe la frase ' + normalize_(id) + '.');
-      seen[key] = true;
-      phraseIds.push(phrases.byId[key].id);
-    });
-
-    const sheet = getCollectionMembersSheet_(ss);
-    const table = readTable_(sheet, COLLECTION_MEMBER_WIDTH);
-    const currentIds = collectionMemberIds_(table, collection.id);
-    const nextPosition = nextCollectionPosition_(table, collection.id);
-    const current = {};
-    currentIds.forEach(function (id) { current[collectionIdKey_(id)] = true; });
-    const additions = phraseIds.filter(function (id) { return !current[collectionIdKey_(id)]; });
-    if (additions.length) {
-      sheet.getRange(table.lastRow + 1, 1, additions.length, COLLECTION_MEMBER_WIDTH).setValues(
-        additions.map(function (id, index) { return [collection.id, id, nextPosition + index]; })
-      );
-    }
-    return {
-      collectionId: collection.id,
-      phraseIds: currentIds.concat(additions),
-      addedIds: additions,
-      skippedIds: phraseIds.filter(function (id) { return current[collectionIdKey_(id)]; })
-    };
-  });
-}
-
-function removeCollectionPhrase(payload) {
-  const collectionId = normalize_(payload && payload.collectionId);
-  const phraseId = normalize_(payload && payload.phraseId);
-  if (!collectionId || isUnassignedCollection_(collectionId) || !phraseId) {
-    throw new Error('Falta la colección o la frase.');
-  }
-
-  return withLock_(function () {
-    const ss = getSpreadsheet_();
-    const collections = collectionRows_(readTable_(getCollectionsSheet_(ss), COLLECTION_WIDTH));
-    if (!collections.byId[collectionIdKey_(collectionId)]) throw new Error('No existe la colección ' + collectionId + '.');
-
-    const sheet = getCollectionMembersSheet_(ss);
-    const table = readTable_(sheet, COLLECTION_MEMBER_WIDTH);
-    const entries = collectionMemberEntries_(table, collectionId);
-    const entry = entries.find(function (item) { return collectionIdKey_(item.id) === collectionIdKey_(phraseId); });
-    if (!entry) throw new Error('Esa frase no pertenece a la colección.');
-    clearCollectionMembers_(sheet, table, function (row) {
-      return collectionIdKey_(row[COLLECTION_MEMBER_COL.COLLECTION_ID - 1]) === collectionIdKey_(collectionId) &&
-        collectionIdKey_(row[COLLECTION_MEMBER_COL.PHRASE_ID - 1]) === collectionIdKey_(phraseId);
-    });
-    return { collectionId: collectionId, phraseId: phraseId, phraseIds: entries.filter(function (item) {
-      return item !== entry;
-    }).map(function (item) { return item.id; }) };
-  });
-}
-
-function moveCollectionPhrase(payload) {
-  const collectionId = normalize_(payload && payload.collectionId);
-  const phraseId = normalize_(payload && payload.phraseId);
-  const direction = Number(payload && payload.direction);
-  if (!collectionId || isUnassignedCollection_(collectionId) || !phraseId || (direction !== -1 && direction !== 1)) {
-    throw new Error('Movimiento de colección inválido.');
-  }
-
-  return withLock_(function () {
-    const ss = getSpreadsheet_();
-    const collections = collectionRows_(readTable_(getCollectionsSheet_(ss), COLLECTION_WIDTH));
-    if (!collections.byId[collectionIdKey_(collectionId)]) throw new Error('No existe la colección ' + collectionId + '.');
-
-    const sheet = getCollectionMembersSheet_(ss);
-    const table = readTable_(sheet, COLLECTION_MEMBER_WIDTH);
-    const entries = collectionMemberEntries_(table, collectionId);
-    const index = entries.findIndex(function (entry) { return collectionIdKey_(entry.id) === collectionIdKey_(phraseId); });
-    if (index === -1) throw new Error('Esa frase no pertenece a la colección.');
-
-    const next = index + direction;
-    if (next >= 0 && next < entries.length) {
-      const moved = entries[index];
-      const adjacent = entries[next];
-      entries[index] = adjacent;
-      entries[next] = moved;
-      const seen = {};
-      const needsReindex = entries.some(function (entry) {
-        const key = String(entry.position);
-        if (entry.position >= Number.MAX_SAFE_INTEGER || seen[key]) return true;
-        seen[key] = true;
-        return false;
-      });
-      if (needsReindex) {
-        reindexCollectionMemberEntries_(sheet, entries);
-      } else {
-        sheet.getRange(moved.rowIndex, COLLECTION_MEMBER_COL.POSITION).setValue(adjacent.position);
-        sheet.getRange(adjacent.rowIndex, COLLECTION_MEMBER_COL.POSITION).setValue(moved.position);
-      }
-    }
-    return { collectionId: collectionId, phraseId: phraseId, phraseIds: entries.map(function (entry) { return entry.id; }) };
   });
 }
 
@@ -1281,72 +1092,7 @@ function generatePhraseHtml(payload) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Historial de estudio                                                */
-/* ------------------------------------------------------------------ */
-
-function historyEntries_(sheet) {
-  const lastRow = sheet.getLastRow();
-  const values = lastRow > 1
-    ? sheet.getRange(2, 1, lastRow - 1, HISTORY_WIDTH).getValues()
-    : [];
-  const byId = {};
-
-  values.forEach(function (row) {
-    const id = normalize_(row[HISTORY_COL.ID - 1]);
-    if (!id) return;
-
-    const entry = {
-      id: id,
-      correct: normalize_(row[HISTORY_COL.RESULT - 1]) === 'bien',
-      reviewedAt: row[HISTORY_COL.REVIEWED_AT - 1]
-    };
-    const key = id.toUpperCase();
-    if (!byId[key] || timeOf_(entry.reviewedAt) >= timeOf_(byId[key].reviewedAt)) {
-      byId[key] = entry;
-    }
-  });
-
-  return Object.keys(byId).map(function (key) { return byId[key]; })
-    .sort(function (a, b) { return timeOf_(b.reviewedAt) - timeOf_(a.reviewedAt); })
-    .slice(0, HISTORY_LIMIT);
-}
-
-function historyWindow_(entries, latest) {
-  const seen = {};
-  const out = [];
-
-  [latest].concat(entries).forEach(function (entry) {
-    if (!entry) return;
-    const key = normalize_(entry.id).toUpperCase();
-    if (!key || seen[key]) return;
-    seen[key] = true;
-    out.push(entry);
-  });
-
-  return out.slice(0, HISTORY_LIMIT);
-}
-
-function writeHistory_(sheet, entries) {
-  const count = Math.max(sheet.getLastRow() - 1, entries.length);
-  if (!count) return;
-
-  const rows = entries.map(function (entry) {
-    return [entry.id, entry.correct ? 'bien' : 'mal', entry.reviewedAt];
-  });
-  while (rows.length < count) rows.push(['', '', '']);
-  sheet.getRange(2, 1, count, HISTORY_WIDTH).setValues(rows);
-}
-
-function historyToObject_(entry) {
-  return {
-    id: entry.id,
-    correct: entry.correct,
-    reviewedAt: toIso_(entry.reviewedAt)
-  };
-}
-
-/* ------------------------------------------------------------------ */
-/* Alta                                                                */
+/* Alta y edición de frases                                            */
 /* ------------------------------------------------------------------ */
 
 function assertPhraseCollectionVersion_(table, collections, phraseId, expectedIds) {
@@ -1546,29 +1292,6 @@ function saveGeneratedPhrases(payload) {
   });
 }
 
-function recordStudy(id, correct) {
-  const phraseId = normalize_(id);
-  if (!phraseId) throw new Error('Falta el ID de la frase.');
-  if (typeof correct !== 'boolean') throw new Error('El resultado debe ser bien o mal.');
-
-  return withLock_(function () {
-    const ss = getSpreadsheet_();
-    const phrases = readTable_(getSheet_(ss));
-    if (rowOf_(phrases, phraseId) === -1) {
-      throw new Error('No existe la frase ' + phraseId + '.');
-    }
-
-    const historySheet = getHistorySheet_(ss);
-    const history = historyWindow_(historyEntries_(historySheet), {
-      id: phraseId,
-      correct: correct,
-      reviewedAt: new Date()
-    });
-    writeHistory_(historySheet, history);
-    return { history: history.map(historyToObject_) };
-  });
-}
-
 function importDelimiter_(value) {
   if (value === ',' || value === '\t') return value;
   throw new Error('Elegí coma o tab como separador.');
@@ -1764,16 +1487,9 @@ function deletePhrase(payload) {
     if (rowIndex === -1) throw new Error('No existe la frase ' + phraseId + '.');
     assertPhraseVersion_(table.values[rowIndex - 2], expectedUpdated);
 
-    const historySheet = getHistorySheet_(ss);
-    const history = historyEntries_(historySheet);
-    const kept = history.filter(function (entry) {
-      return entry.id.toUpperCase() !== phraseId.toUpperCase();
-    });
-    if (kept.length !== history.length) writeHistory_(historySheet, kept);
-
     removePhraseFromCollections_(phraseId, ss);
     sheet.deleteRow(rowIndex);
-    return { id: phraseId, history: kept.map(historyToObject_) };
+    return { id: phraseId };
   });
 }
 

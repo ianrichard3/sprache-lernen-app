@@ -47,7 +47,6 @@ function sheet(name, rows, columns = 26) {
 const created = new Date('2026-10-01T00:00:00Z');
 const sheets = {
   Frases:sheet('Frases', [Array(9).fill(''), ['F0001', 'Hallo', 'Hola', 'nota', 'Dominada', 'saludo', created, created, created]], 9),
-  Historial:sheet('Historial', [['ID', 'Resultado', 'Estudiado']]),
   Colecciones:sheet('Colecciones', [['ID', 'Nombre', 'Creado', 'Actualizado'], ['C0001', 'Viaje', created, created]]),
   ColeccionesFrases:sheet('ColeccionesFrases', [['Colección ID', 'Frase ID', 'Posición']])
 };
@@ -308,7 +307,7 @@ console.log('Language pairs, phrase persistence, imports, documents and AI valid
 function between(start, end) { return html.slice(html.indexOf(start), html.indexOf(end, html.indexOf(start))); }
 const state = {language:japanese, showPronunciation:true, languageBusy:0, view:'generate',
   generator:{busy:false, items:[{de:payload.de, es:payload.es, pronunciation:'', kana:payload.kana, saved:false}]},
-  session:{phase:'listen', supports:{german:false, spanish:true}, revealedIndex:null}, detailId:'F1', studyTab:'phrases', revealed:false};
+  session:{supports:{german:false, spanish:true, pronunciation:true}, revealedIds:{}}};
 const fields = Object.fromEntries(['f-de', 'f-pronunciation', 'f-kana', 'f-pronunciation-warning'].map(id => [id, {value:'', hidden:true}]));
 fields['f-de'].value = payload.de;
 let success, failure, calls = 0, sent, renders = 0, message;
@@ -317,20 +316,16 @@ const furiganaButton = {dataset:{index:'0', field:'kana'}, disabled:false, textC
 const run = {withSuccessHandler(fn) { success = fn; return this; }, withFailureHandler(fn) { failure = fn; return this; }, suggestPronunciation(text, version, field) { calls++; sent = [text, version, field]; }};
 const screen = {innerHTML:''};
 const client = Function('state', 'document', 'google', 'screen', `
-  var player = {index:0, playing:false, voice:{}};
   var el = {screen};
   function renderGenerator() { google.rendered(); }
   function say(text) { google.notified(text); }
   function byId() { return ${JSON.stringify({...payload, id:'F1'})}; }
-  function studyTabsHtml() { return ''; }
   ${between('  function targetName_()', '  function languageDraft_')}
   ${between('  function esc(text)', '  function say(')}
-  ${between('  function recallPhase_()', '  function currentAudioAvailable_')}
   ${between('  function sessionRowHtml_(', '  function sessionPage_')}
-  ${between('  function renderStudy()', '  function phraseCollectionPickerHtml_')}
   ${between('  function originalChanged_(', '  function translateToGerman()')}
-  ${between('  function matchingItems(', '  function managedItems()')}
-  return {suggestPronunciation_, originalChanged_, pronunciationFieldsHtml_, row:sessionRowHtml_, renderStudy, matchingItems};
+  ${between('  function matchingItems(', '  function filterCollectionItems_(')}
+  return {suggestPronunciation_, originalChanged_, pronunciationFieldsHtml_, row:sessionRowHtml_, matchingItems};
 `)(state, {getElementById:id => fields[id] || null, body:{contains:() => true}}, {script:{run}, rendered() { renders++; }, notified(text) { message = text; }}, screen);
 client.suggestPronunciation_(button);
 assert.equal(state.languageBusy, 1);
@@ -439,27 +434,16 @@ assert.match(editorHtml, /data-field="kana"[^>]*>Sugerir furigana con IA/);
 assert.match(editorHtml, /data-field="pronunciation"[^>]*>Sugerir romaji con IA/);
 const japaneseItem = {...payload, id:'F1', notes:'', tags:[]};
 assert.doesNotMatch(client.row(japaneseItem, 0), /きょう|Kyō|今日は/);
-state.session.phase = 'understand';
 state.session.supports.german = true;
 assert.match(client.row(japaneseItem, 0), /今日は[\s\S]*きょう[\s\S]*Kyō/);
 assert.ok(client.row({...japaneseItem, kana:coffeeFurigana}, 0).includes(coffeeFurigana));
-state.showPronunciation = false;
+state.session.supports.pronunciation = false;
 assert.doesNotMatch(client.row(japaneseItem, 0), /きょう|Kyō/);
-state.showPronunciation = true;
-state.session.phase = 'recall';
+state.session.supports.german = false;
 assert.doesNotMatch(client.row(japaneseItem, 0), /きょう|Kyō|今日は/);
-state.session.revealedIndex = 0;
+state.session.revealedIds.F1 = true;
 assert.match(client.row(japaneseItem, 0), /きょう[\s\S]*Kyō/);
-assert.doesNotMatch(client.row(japaneseItem, 1), /きょう|Kyō|今日は/);
-client.renderStudy();
-assert.doesNotMatch(screen.innerHTML, /きょう|Kyō|今日は/);
-state.revealed = true;
-client.renderStudy();
-assert.match(screen.innerHTML, /きょう[\s\S]*Kyō/);
-assert.equal((screen.innerHTML.match(/data-act="toggle-pronunciation"/g) || []).length, 1);
-state.showPronunciation = false;
-client.renderStudy();
-assert.doesNotMatch(screen.innerHTML, /きょう|Kyō/);
+assert.doesNotMatch(client.row({...japaneseItem, id:'F2'}, 1), /きょう|Kyō|今日は/);
 assert.deepEqual(client.matchingItems([japaneseItem], 'きょう'), [japaneseItem]);
 assert.deepEqual(client.matchingItems([japaneseItem], 'KYŌ'), [japaneseItem]);
 assert.deepEqual(client.matchingItems([{...japaneseItem, kana:coffeeFurigana}], 'のみます'), [{...japaneseItem, kana:coffeeFurigana}]);
@@ -467,5 +451,5 @@ state.language = {name:'ruso', locale:'ru-RU', translation:english};
 assert.doesNotMatch(client.pronunciationFieldsHtml_(russian, null, ''), /id="f-kana"/);
 assert.match(client.pronunciationFieldsHtml_(russian, null, ''), /Dobroye utro/);
 assert.match(client.pronunciationFieldsHtml_(russian, null, ''), /Sugerir pronunciación con IA/);
-assert.match(html, /new SpeechSynthesisUtterance\(item.de\)/);
-console.log('Editable pronunciation suggestions, search, study hiding and original audio: OK');
+assert.doesNotMatch(html, /SpeechSynthesisUtterance|speechSynthesis/);
+console.log('Editable pronunciation suggestions, search, practice visibility: OK');

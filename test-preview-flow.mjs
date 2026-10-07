@@ -9,20 +9,24 @@ import {spawn} from 'node:child_process';
 // Run separately from the Node-only CI checks: this requires Firefox installed.
 const html = readFileSync('App.html', 'utf8');
 const mock = String.raw`<script>
-var spoken = [], cancellations = 0;
-Object.defineProperty(window,'speechSynthesis',{value:{getVoices:()=>[{lang:'ja-JP',name:'Japanese'}],cancel:()=>cancellations++,speak:utterance=>spoken.push(utterance.text),addEventListener(){}}});
-window.SpeechSynthesisUtterance=function(text){this.text=text;};
+Object.defineProperty(window,'speechSynthesis',{get(){throw Error('Audio must not be used');}});
+var copied = '';
+Object.defineProperty(navigator,'clipboard',{value:{writeText(text){copied=text;return Promise.resolve();}}});
 var calls = [], pendingSave, deferSave = false, failSave = false, deferredTranslation, deferredPronunciation;
 var snapshot = {language:{name:'japonés',locale:'ja-JP',translation:{name:'inglés',locale:'en-US'},version:1},
  items:[{id:'F1',de:'今日はコーヒーを飲みます。',es:'I will drink coffee today.',kana:'きょうはコーヒーをのみます。',pronunciation:'Kyō wa kōhī o nomimasu.',notes:'',tags:[],updated:'initial',printedAt:'printed'},
  {id:'F2',de:'ありがとう。',es:'Thank you.',kana:'',pronunciation:'',notes:'',tags:[],updated:'initial2',printedAt:''}],
- history:[],collections:[{id:'C1',name:'Café',count:2},{id:'C2',name:'Viaje',count:1}],memberIdsByCollection:{C1:['F1','F2'],C2:['F1']}};
+ collections:[{id:'__unassigned__',name:'Sin colección',count:0,unassigned:true},{id:'C1',name:'Café',count:2},{id:'C2',name:'Viaje',count:1}],memberIdsByCollection:{C1:['F1','F2'],C2:['F1']}};
+for(var index=3;index<=52;index++) {
+ snapshot.items.push({id:'F'+index,de:'Original '+index,es:'Translation '+index,kana:'',pronunciation:'',notes:'',tags:[],updated:'initial'+index,printedAt:''});
+ if(index<=27) snapshot.memberIdsByCollection.C1.push('F'+index);
+}
 function materialBody() {
  var aids=snapshot.items.some(item=>item.pronunciation||item.kana);
  function row(item) {
   return '<tr data-phrase-id="'+item.id+'"><td>'+item.de+'</td>'+(aids?'<td data-print-pronunciation>'+['kana','pronunciation'].map(field=>'<span data-pronunciation-field="'+field+'" data-phrase-id="'+item.id+'">'+item[field]+'</span>').join('')+'</td>':'')+'<td>'+item.es+'</td></tr>';
  }
- return '<h1>Material</h1>'+[snapshot.items,[snapshot.items[0]]].map(items=>'<table><thead><tr><th>Japonés</th>'+(aids?'<th data-print-pronunciation>Pronunciación</th>':'')+'<th>Inglés</th></tr></thead><tbody>'+items.map(row).join('')+'</tbody></table>').join('');
+ return '<h1>Material</h1>'+[snapshot.items.slice(0,2),[snapshot.items[0]]].map(items=>'<table><thead><tr><th>Japonés</th>'+(aids?'<th data-print-pronunciation>Pronunciación</th>':'')+'<th>Inglés</th></tr></thead><tbody>'+items.map(row).join('')+'</tbody></table>').join('');
 }
 function materialResult() {
  var body=materialBody();
@@ -39,6 +43,11 @@ window.google={script:{get run() {
    if(key==='suggestGermanTranslation'||key==='suggestSpanishTranslation') {deferredTranslation=success;return;}
    if(key==='suggestPronunciation') {deferredPronunciation=success;return;}
    if(key==='generatePhrases') return success(Array.from({length:10},()=>({de:snapshot.items[0].de,es:snapshot.items[0].es})));
+   if(key==='previewImport') return success({columnCount:2,rows:[['Original','Translation']]});
+   if(key==='importPhrases') return failure({message:'Import failed'});
+   if(key==='createCollection') {var collection={id:'C3',name:payload.name,count:0};snapshot.collections.push(collection);snapshot.memberIdsByCollection.C3=[];return success(collection);}
+   if(key==='renameCollection') {var collection=snapshot.collections.find(item=>item.id===payload.id);collection.name=payload.name;return success({...collection});}
+   if(key==='deleteCollection') {snapshot.collections=snapshot.collections.filter(item=>item.id!==payload);delete snapshot.memberIdsByCollection[payload];return success({id:payload});}
    if(key==='loadAppData') return success(structuredClone(snapshot));
    if(key==='previewPhraseMaterial') return success(materialResult());
    if(key==='generatePhraseHtml') {
@@ -103,21 +112,65 @@ const smoke = String.raw`<script>
   check(node('#note').textContent.includes('no tiene kanji'),'no-kanji notice in editor');
   check(calls.length===callsBeforeNoKanji,'no-kanji editor avoids RPC');
   check(node('#f-kana').value===furigana,'no-kanji editor preserves existing aid');
-  click('[data-view="collections"]');click('[data-act="open-collection"][data-id="C1"]');
-  var phase=node('#session-phase');phase.value='recall';phase.dispatchEvent(new Event('change',{bubbles:true}));
-  check(!document.querySelector('.session-row-de'),'recall hides original');
-  check(!document.querySelector('.pronunciation'),'recall hides aids');
+  // Five primary sections, native import disclosure and stable filtered practice.
+  check(document.querySelectorAll('header .nav').length===5,'five primary sections');
+  click('[data-act="cancel-editor"]');
+  check(!node('#import-panel').open,'import initially collapsed');
+  node('#import-panel').open=true;
+  await new Promise(resolve=>setTimeout(resolve,0));
+  node('#import-text').value='Original,Translation';node('#import-text').dispatchEvent(new Event('input',{bubbles:true}));
+  click('[data-act="preview-import"]');check(node('#import-panel').open,'preview stays open');
+  node('#import-de').value='1';node('#import-de').dispatchEvent(new Event('change',{bubbles:true}));
+  click('[data-act="import"]');check(node('#import-panel').open,'failed import stays open');
+  click('[data-view="settings"]');click('[data-view="manage"]');
+  check(node('#import-text').value==='Original,Translation','import draft preserved');
+  check(node('#import-de').value==='1','import mapping preserved');
+  click('[data-act="edit"][data-id="F1"]');node('#f-es').value='Pending edit';
+  click('[data-phrase-filter="manage"][value="C1"]');
+  check(document.querySelectorAll('.manage-item').length===25,'manage filters before pagination');
+  check(node('#f-es').value==='Pending edit','filter preserves phrase editor');
+  click('[data-act="page"][data-list="manage"][data-direction="1"]');
+  check(document.querySelectorAll('.manage-item').length===2,'27 filtered phrases on two pages');
+  click('[data-phrase-filter="manage"][value="C1"]');click('[data-phrase-filter="manage"][value="C2"]');
+  check(document.querySelectorAll('.manage-item').length===1,'filter resets manage page');
+  check(!document.querySelector('.pagination'),'one filtered page has no pagination');
+  click('[data-view="collections"]');
+  check(document.querySelectorAll('.collection-choice').length===2,'only real collections');
+  check(!document.querySelector('[data-act="new-collection-phrase"]'),'collections have no phrase creation');
+  click('[data-act="new-collection"]');node('#collection-name').value='Test collection';click('[data-act="save-collection"]');
+  click('[data-act="edit-collection"][data-id="C3"]');node('#collection-name').value='Renamed';click('[data-act="save-collection"]');
+  check(node('[data-act="edit-collection"][data-id="C3"]').parentElement.textContent.includes('Renamed'),'rename collection');
+  click('[data-act="delete-collection"][data-id="C3"]');check(snapshot.items.length===52,'delete collection preserves phrases');
+  click('[data-view="practice"]');
+  check(node('#session-order').value==='random','random is default');
+  click('[data-phrase-filter="practice"][value="C1"]');click('[data-phrase-filter="practice"][value="C2"]');
+  check(node('#practice-count').textContent==='27 frases','collection union deduplicates');
+  var firstIds=Array.from(document.querySelectorAll('.session-choice')).map(row=>row.dataset.id).join(',');
+  click('[data-act="page"][data-list="practice"][data-direction="1"]');
+  check(document.querySelectorAll('.session-choice').length===2,'practice filters before pagination');
+  click('[data-act="page"][data-list="practice"][data-direction="-1"]');
+  check(Array.from(document.querySelectorAll('.session-choice')).map(row=>row.dataset.id).join(',')===firstIds,'page changes preserve random order');
+  click('[data-act="copy-session-ssml"]');await Promise.resolve();
+  check((copied.match(/<break /g)||[]).length===27,'SSML includes all filtered pages');
+  check(copied.includes(snapshot.items[0].de)&&!copied.includes('Original 28'),'SSML contains only filtered phrases');
+  click('[data-act="clear-phrase-filter"][data-list="practice"]');
+  var order=node('#session-order');order.value='manual';order.dispatchEvent(new Event('change',{bubbles:true}));
+  check(node('.session-choice').dataset.id==='F1','normal order follows phrase list');
   click('[data-act="toggle-support"][data-support="german"]');
-  check(node('.pronunciation').textContent.includes('きょう'),'revealing shows kana');
-  click('[data-act="player-row-toggle"][data-index="0"]');
-  check(spoken.length===1&&spoken[0]===snapshot.items[0].de,'revealed audio reads original');
-  var beforeHide=cancellations;click('[data-act="toggle-support"][data-support="german"]');
-  check(cancellations>beforeHide,'hiding stops revealed audio');
-  check(!document.querySelector('.pronunciation'),'hiding removes aids');
-  phase=node('#session-phase');phase.value='listen';phase.dispatchEvent(new Event('change',{bubbles:true}));
-  click('[data-act="player-row-toggle"][data-index="0"]');
-  check(spoken.length===2,'listening can play while original hidden');
-  check(!document.querySelector('.pronunciation'),'listening hides aids');
+  check(document.activeElement.dataset.support==='german','global visibility retains keyboard focus');
+  check(!document.querySelector('.session-row-de'),'global hide original');
+  check(!document.querySelector('.pronunciation'),'hidden original hides aids');
+  click('[data-act="reveal-practice"][data-id="F1"]');
+  check(document.activeElement.dataset.id==='F1','row reveal retains keyboard focus');
+  check(node('.pronunciation').textContent.includes('きょう'),'row reveal shows kana');
+  check(node('.session-row-es').textContent===snapshot.items[0].es,'row reveal shows translation');
+  click('[data-act="reveal-practice"][data-id="F1"]');check(!document.querySelector('.session-row-de'),'second click hides row');
+  click('[data-act="reveal-practice"][data-id="F1"]');
+  click('[data-act="toggle-support"][data-support="spanish"]');check(!document.querySelector('.session-row-de'),'global controls clear row reveals');
+  var search=node('#practice-search');search.value='does not exist';search.dispatchEvent(new Event('input',{bubbles:true}));
+  check(!document.querySelector('.pagination')&&node('[data-act="copy-session-ssml"]').disabled,'empty filtered state');
+  click('[data-view="tools"]');check(!node('#tool-nav').hidden,'tool navigation visible');
+  check(node('header [data-view="tools"]').getAttribute('aria-current')==='page','tools primary section active');
   click('[data-view="print"]');click('[data-act="preview-material"]');
   check(node(aids('kana')).contentEditable==='true','editable kana');
   check(node(aids('kana')).parentElement.contentEditable==='false','editing preserves field boundaries');
@@ -147,6 +200,8 @@ const smoke = String.raw`<script>
   check(!node('[data-act="save-print-pronunciation"]').disabled,'failed save can retry');
   failSave=false;click('[data-act="save-print-pronunciation"]');
   check(snapshot.items[0].pronunciation==='First','retry persists edit');
+  click('[data-view="etymology"]');click('[data-view="print"]');
+  check(node('#print-preview-content tr[data-phrase-id="F1"] td:first-child').textContent==='File-only original','tool switch preserves material edits');
   // Browser line breaks round-trip as text, including kana-free romanization.
   node(aids('pronunciation')).innerHTML='Line 1<br>Line 2';
   click('[data-act="save-print-pronunciation"]');
@@ -186,7 +241,10 @@ const smoke = String.raw`<script>
   check(node('#note').textContent.includes('no tiene kanji'),'no-kanji notice in draft');
   check(calls.length===callsBeforeNoKanji,'no-kanji draft avoids RPC');
   check(node('#generated-kana-0').value===furigana,'no-kanji draft preserves existing aid');
-  await fetch('/result',{method:'POST',body:JSON.stringify({count})});
+  click('[data-view="settings"]');click('[data-view="tools"]');
+  check(node('#generator-context').value==='Coffee'&&node('#generated-kana-0').value===furigana,'tools reopen last tool with drafts');
+  check(document.documentElement.scrollWidth<=window.innerWidth,'layout fits viewport');
+  await fetch('/result' ,{method:'POST',body:JSON.stringify({count})});
  } catch(error) {await fetch('/result',{method:'POST',body:JSON.stringify({count,error:error.message+"\n"+error.stack})});}
 }());
 </script>`;
@@ -208,11 +266,12 @@ try {
     timer = setTimeout(() => reject(new Error('Browser checks timed out')), 30000);
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
-  browser = spawn('firefox', ['--headless', '--no-remote', '--profile', directory, `http://127.0.0.1:${server.address().port}`], {stdio:'ignore'});
+  const mobile = process.argv.includes('--mobile');
+  browser = spawn('firefox', ['--headless', '--no-remote', '--width', mobile ? '390' : '1280', '--height', mobile ? '844' : '900', '--profile', directory, `http://127.0.0.1:${server.address().port}`], {stdio:'ignore'});
   browser.on('error', error => finish({error:error.message}));
   const result = await report;
   assert.equal(result.error, undefined, result.error);
-  console.log(`Independent pronunciation, preview editing, translation and recall audio in Firefox: ${result.count} checks OK`);
+  console.log(`Navigation, filters, practice, pronunciation and preview editing in Firefox (${mobile ? 'mobile' : 'desktop'}): ${result.count} checks OK`);
 } finally {
   clearTimeout(timer);
   if (browser && browser.exitCode === null) {

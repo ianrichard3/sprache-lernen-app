@@ -27,43 +27,6 @@ assert.equal(isReservedCollectionName(' TODAS '), true);
 assert.equal(isReservedCollectionName('Todas 2'), false);
 assert.match(code, /if \(isReservedCollectionName_\(name\)\) throw new Error\('El nombre "Todas" está reservado\.'\);/g);
 
-const collectionMemberEntries = Function(
-  "const COLLECTION_MEMBER_COL = { COLLECTION_ID: 1, PHRASE_ID: 2, POSITION: 3 };\n" +
-  "function normalize_(value) { return String(value == null ? '' : value).trim(); }\n" +
-  "function collectionIdKey_(value) { return normalize_(value).toUpperCase(); }\n" +
-  between(code, 'function collectionMemberEntries_(table, collectionId) {', '\n\nfunction collectionMemberIds_') +
-  '\nreturn collectionMemberEntries_;'
-)();
-assert.deepEqual(
-  collectionMemberEntries({values: [['C1', 'F2', 2], ['', '', ''], ['C1', 'F1', 1]]}, 'c1')
-    .map(({id, rowIndex}) => [id, rowIndex]),
-  [['F1', 4], ['F2', 2]]
-);
-
-const nextCollectionPosition = Function(
-  "const COLLECTION_MEMBER_COL = { COLLECTION_ID: 1, PHRASE_ID: 2, POSITION: 3 };\n" +
-  "function normalize_(value) { return String(value == null ? '' : value).trim(); }\n" +
-  "function collectionIdKey_(value) { return normalize_(value).toUpperCase(); }\n" +
-  between(code, 'function nextCollectionPosition_(table, collectionId) {', '\n\nfunction reindexCollectionMemberEntries_') +
-  '\nreturn nextCollectionPosition_;'
-)();
-assert.equal(nextCollectionPosition({values: [['C1', 'F1', 1], ['C1', 'F3', 3], ['C2', 'F2', 9]]}, 'c1'), 4);
-
-const reindexCollectionMemberEntries = Function(
-  "const COLLECTION_MEMBER_COL = { COLLECTION_ID: 1, PHRASE_ID: 2, POSITION: 3 };\n" +
-  between(code, 'function reindexCollectionMemberEntries_(sheet, entries) {', '\n\nfunction clearCollectionMembers_') +
-  '\nreturn reindexCollectionMemberEntries_;'
-)();
-const repairedRange = {
-  values: [[3], [9], [3]],
-  getValues() { return this.values.map(row => row.slice()); },
-  setValues(values) { this.values = values; }
-};
-const repairedEntries = [{rowIndex: 2, position: 3}, {rowIndex: 4, position: 3}];
-reindexCollectionMemberEntries({getRange() { return repairedRange; }}, repairedEntries);
-assert.deepEqual(repairedEntries.map(({position}) => position), [1, 2]);
-assert.deepEqual(repairedRange.values, [[1], [9], [2]]);
-
 const requestedCollectionIds = Function(
   "const UNASSIGNED_COLLECTION_ID = '__unassigned__';\n" +
   "function normalize_(value) { return String(value == null ? '' : value).trim(); }\n" +
@@ -105,33 +68,6 @@ assert.deepEqual(memberships.rows.map(({collectionKey, phraseKey, position}) => 
 assert.deepEqual(memberships.byPhrase, {F1: ['C1']});
 
 const html = readFileSync('App.html', 'utf8');
-const localCollection = Function(
-  "const ALL_COLLECTION_ID = '__all__';\n" +
-  "var state = {items: [{id: 'F1'}, {id: 'F2'}, {id: 'F3'}], collections: [{id: 'C1', name: 'Trabajo'}], memberIdsByCollection: {C1: ['F1']}};\n" +
-  "function collectionKey_(id) { return String(id || '').toUpperCase(); }\n" +
-  "function collectionById_(id) { return state.collections.find(function (item) { return collectionKey_(item.id) === collectionKey_(id); }) || null; }\n" +
-  "function assignedPhraseIds_() { return {F1: true}; }\n" +
-  "function byId(id) { return state.items.find(function (item) { return item.id === id; }) || null; }\n" +
-  between(html, '  function localCollection_(id) {', '\n\n  function refreshOpenCollection_') +
-  '\nreturn {state, localCollection:localCollection_};'
-)();
-const allCollection = localCollection.localCollection('__all__');
-assert.equal(allCollection.collection.name, 'Todas');
-assert.equal(allCollection.collection.count, 3);
-assert.deepEqual(allCollection.items.map(({id}) => id), ['F1', 'F2', 'F3']);
-assert.notEqual(allCollection.items, localCollection.state.items);
-assert.match(html, /var collections = \[\{ id:ALL_COLLECTION_ID, name:'Todas', count:state\.items\.length, all:true \}\]\.concat\(state\.collections\)/);
-assert.match(html, /collection\.collection\.unassigned \|\| collection\.collection\.all/);
-assert.match(html, /if \(act === 'new-collection-phrase'\) \{ stopPlayer_\(\)/);
-assert.match(html, /expectedCollectionIds:id \? \(state\.editingCollectionIds \|\| \[\]\) : \[\]/);
-assert.doesNotMatch(code, /function (?:createPhrase|updatePhrase|addCollectionPhrase|writeCollectionMember_)\b/);
-const selectedCollectionCandidateIds = Function(
-  "var state = {collectionSelection:{F1:true, F2:false, F3:true}};\n" +
-  between(html, '  function selectedCollectionCandidateIds_() {', '\n\n  function collectionEditorHtml') +
-  '\nreturn selectedCollectionCandidateIds_;'
-)();
-assert.deepEqual(selectedCollectionCandidateIds(), ['F1', 'F3']);
-
 const setPhraseCollectionIds = Function(
   "var state = {memberIdsByCollection:{C1:['F1'], C2:[]}};\n" +
   "function collectionKey_(id) { return String(id || '').toUpperCase(); }\n" +
@@ -140,85 +76,6 @@ const setPhraseCollectionIds = Function(
 )();
 setPhraseCollectionIds.set('F1', ['C2']);
 assert.deepEqual(setPhraseCollectionIds.state.memberIdsByCollection, {C1: [], C2: ['F1']});
-const phaseDefaults = Function(
-  between(html, '  function phaseDefaults_(phase) {', '\n\n  function shuffledItems_') +
-  '\nreturn phaseDefaults_;'
-)();
-assert.deepEqual(phaseDefaults('understand'), {german: true, spanish: true});
-assert.deepEqual(phaseDefaults('listen'), {german: false, spanish: false});
-assert.deepEqual(phaseDefaults('shadow'), {german: true, spanish: false});
-assert.deepEqual(phaseDefaults('recall'), {german: false, spanish: true});
-
-const shuffledItems = Function(
-  between(html, '  function shuffledItems_(items) {', '\n\n  function sessionItems_') +
-  '\nreturn shuffledItems_;'
-)();
-const originalRandom = Math.random;
-Math.random = () => 0;
-const originalItems = [{id: 'F1'}, {id: 'F2'}, {id: 'F3'}];
-assert.deepEqual(shuffledItems(originalItems).map(({id}) => id), ['F2', 'F3', 'F1']);
-assert.deepEqual(originalItems.map(({id}) => id), ['F1', 'F2', 'F3']);
-Math.random = originalRandom;
-
-const nextPlaybackPosition = Function(
-  between(html, '  function nextPlaybackPosition(length, index, repetition, repetitions) {', '\n\n  function playerVoiceReady_') +
-  '\nreturn nextPlaybackPosition;'
-)();
-assert.deepEqual(nextPlaybackPosition(3, 1, 0, 2), {index: 1, repetition: 1});
-assert.deepEqual(nextPlaybackPosition(3, 1, 1, 2), {index: 2, repetition: 0});
-assert.deepEqual(nextPlaybackPosition(3, 2, 0, 1), {index: 0, repetition: 0});
-
-const movePlayer = Function(
-  "var state = { session:{items:[{}, {}, {}], phase:'free', supports:{}} };\n" +
-  "var player = {index:0, repetition:0, playing:false};\n" +
-  "function sessionItems_() { return state.session.items; }\n" +
-  "function stopPlayer_() {} function resetPhraseSupports_() {} function updatePlayerUi_() {}\n" +
-  "function recallPhase_() { return false; } function startPlayer_() {}\n" +
-  between(html, '  function movePlayer_(direction) {', '\n\n  function restartPlayer_') +
-  '\nreturn {state:state, player:player, movePlayer_:movePlayer_};'
-)();
-movePlayer.movePlayer_(-1);
-assert.equal(movePlayer.player.index, 2);
-movePlayer.movePlayer_(1);
-assert.equal(movePlayer.player.index, 0);
-
-const toggleSupport = Function(
-  "var state = {session:{phase:'recall', supports:{german:false, spanish:true}, revealedIndex:0}};\n" +
-  "var player = {index:0}; var stopped = 0, updated = 0;\n" +
-  "function recallPhase_() { return state.session.phase === 'recall'; }\n" +
-  "function germanVisible_(index) { return state.session.revealedIndex === index; }\n" +
-  "function stopPlayer_() { stopped++; } function redrawSessionRows_() {} function updatePlayerUi_() { updated++; }\n" +
-  between(html, '  function toggleSupport_(support) {', '\n\n  function byId') +
-  '\nreturn {state:state, toggleSupport_:toggleSupport_, counts:function () { return [stopped, updated]; }};'
-)();
-toggleSupport.toggleSupport_('german');
-assert.deepEqual(toggleSupport.counts(), [1, 1]);
-assert.equal(toggleSupport.state.session.revealedIndex, null);
-toggleSupport.toggleSupport_('german');
-assert.equal(toggleSupport.state.session.revealedIndex, 0);
-
-const sessionRow = Function(
-  "var state = {language:{locale:'de-DE', translation:{name:'español', locale:'es-ES'}}, session:{phase:'listen', supports:{german:false, spanish:false}, revealedIndex:null}};\n" +
-  "var player = {index:0, playing:false, voice:{}};\n" +
-  "function recallPhase_() { return state.session.phase === 'recall'; }\n" +
-  "function germanVisible_(index) { return recallPhase_() ? state.session.revealedIndex === index : state.session.supports.german; }\n" +
-  "function targetName_() { return 'alemán'; } function pronunciationHtml_() { return ''; }\n" +
-  "function esc(value) { return String(value); }\n" +
-  between(html, '  function sessionRowHtml_(item, index) {', '\n\n  function sessionListHtml_') +
-  '\nreturn {state:state, row:sessionRowHtml_};'
-)();
-assert.match(sessionRow.row({de:'Guten Morgen', es:'Buenos días'}, 0), /Frase 1/);
-sessionRow.state.session.phase = 'understand';
-sessionRow.state.session.supports = {german:true, spanish:true};
-assert.match(sessionRow.row({de:'Guten Morgen', es:'Buenos días'}, 0), /Guten Morgen[\s\S]*Buenos días/);
-sessionRow.state.session.phase = 'recall';
-sessionRow.state.session.revealedIndex = null;
-assert.doesNotMatch(sessionRow.row({de:'Guten Morgen', es:'Buenos días'}, 0), /session-row-de/);
-sessionRow.state.session.revealedIndex = 0;
-assert.match(sessionRow.row({de:'Guten Morgen', es:'Buenos días'}, 0), /session-row-de/);
-
-console.log('Collections ordering and player loop: OK');
-
 // Exercise the real batch function and helpers against in-memory Sheets.
 function generatorBackend() {
   const phraseRows = [['F0001', 'Hallo!', 'Hola original', 'nota', 'Dominada', 'saludo', '', '', '']];
@@ -228,6 +85,8 @@ function generatorBackend() {
   function sheet(rows, member = false) {
     return {
       getLastRow() { return rows.length + 1; },
+      deleteRow(index) { rows.splice(index - 2, 1); },
+      getRangeList(ranges) { return {clearContent() { ranges.forEach(range => { rows[Number(range.match(/\d+/)[0]) - 2] = ['', '', '']; }); }}; },
       getRange(start, column, count, width) {
         return {
           getValues() { return rows.slice(start - 2, start - 2 + count).map(row => row.slice(0, width)); },
@@ -247,6 +106,7 @@ function generatorBackend() {
   const memberSheet = sheet(memberRows, true);
   const collectionSheet = sheet([['C1', 'Uno', '', ''], ['C2', 'Dos', '', '']]);
   const run = Function('phraseSheet', 'memberSheet', 'collectionSheet', `
+    const PRODUCTION_SPREADSHEET_ID = 'test';
     const PropertiesService = {getDocumentProperties: () => ({getProperty: () => '1', setProperty: () => {}}), getScriptProperties: () => ({getProperty: () => null})};
     ${code}
     getSpreadsheet_ = () => ({});
@@ -254,9 +114,9 @@ function generatorBackend() {
     getCollectionsSheet_ = () => collectionSheet;
     getCollectionMembersSheet_ = () => memberSheet;
     const LockService = {getDocumentLock: () => null, getScriptLock: () => ({waitLock() {}, releaseLock() {}})};
-    return saveGeneratedPhrases;
+    return {saveGeneratedPhrases, savePhrase, createCollection, renameCollection, deleteCollection, loadAppData, deletePhrase};
   `)(phraseSheet, memberSheet, collectionSheet);
-  return {run, phraseRows, memberRows, fail(rollback = false) { failLinks = true; failRecovery = rollback; }};
+  return {api:run, run:run.saveGeneratedPhrases, phraseRows, memberRows, fail(rollback = false) { failLinks = true; failRecovery = rollback; }};
 }
 const generated = generatorBackend();
 const batch = {items:[{de:'Hallo', es:'No sobrescribir'}, {de:'Guten Tag', es:'Buen día'}, {de:'Guten Tag!', es:'Otra'}], collectionIds:['C2'], expectedLanguageVersion:0};
@@ -319,28 +179,25 @@ assert.equal(lockHeld, false);
 assert.equal(releases, 2);
 console.log('Web app script lock and release on failure: OK');
 
-// Audio in recall is governed by the revealed phrase, just like the visible play button.
-const recallAudio = Function(`
-  var state = {session:{phase:'recall', supports:{german:false}, revealedIndex:null}};
-  var player = {index:0, playing:false, token:0};
-  var cycles = 0;
-  function currentPlayerItem_() { return {id:'F1'}; }
-  function playerVoiceReady_() { return true; }
-  function playPlayerCycle_() { cycles++; }
-  function updatePlayerUi_() {}
-  ${between(html, '  function recallPhase_()', '  function replaceSessionRow_')}
-  ${between(html, '  function startPlayer_()', '  function togglePlayer_')}
-  return {state, player, startPlayer_, cycles:() => cycles};
-`)();
-recallAudio.startPlayer_();
-assert.equal(recallAudio.cycles(), 0);
-recallAudio.state.session.revealedIndex = 0;
-recallAudio.startPlayer_();
-assert.equal(recallAudio.cycles(), 1);
-recallAudio.state.session.revealedIndex = 1;
-recallAudio.startPlayer_();
-assert.equal(recallAudio.cycles(), 1, 'Another revealed row does not reveal the current phrase');
-recallAudio.state.session.phase = 'listen';
-recallAudio.startPlayer_();
-assert.equal(recallAudio.cycles(), 2, 'Listening remains available with hidden original');
-console.log('Recall audio starts only after revealing the current phrase: OK');
+
+// Collection metadata and membership editing use the existing phrase save API.
+const managed = generatorBackend();
+const originalPhrase = managed.phraseRows[0].slice();
+const created = managed.api.createCollection({name:'Viajes'});
+assert.throws(() => managed.api.createCollection({name:'  viajes  '}), /Ya existe/);
+assert.equal(managed.api.renameCollection({id:created.id, name:'Vacaciones'}).name, 'Vacaciones');
+assert.throws(() => managed.api.renameCollection({id:created.id, name:'Uno'}), /Ya existe/);
+managed.api.deleteCollection(created.id);
+assert.deepEqual(managed.phraseRows[0], originalPhrase);
+const edited = managed.api.savePhrase({id:'F0001', de:'Hallo!', es:'Hola original', notes:'nota', tags:'saludo', collectionIds:['C1', 'C2'], expectedCollectionIds:['C1'], expectedUpdated:'', expectedLanguageVersion:0});
+assert.deepEqual(edited.collectionIds, ['C1', 'C2']);
+managed.api.deleteCollection('C1');
+const snapshot = managed.api.loadAppData();
+assert.equal(snapshot.items.length, 1);
+assert.deepEqual(snapshot.memberIdsByCollection.C2, ['F0001']);
+assert.equal(Object.hasOwn(snapshot, 'history'), false);
+assert.deepEqual(managed.api.deletePhrase({id:'F0001', expectedUpdated:edited.item.updated}), {id:'F0001'});
+assert.equal(managed.phraseRows.length, 0);
+assert.deepEqual(managed.memberRows, [['', '', ''], ['', '', '']]);
+assert.doesNotMatch(code, /Historial|recordStudy|addCollectionPhrases|removeCollectionPhrase|moveCollectionPhrase/);
+console.log('Collection CRUD, phrase membership, deletion and history-free snapshot: OK');

@@ -37,7 +37,13 @@ assert.equal(
   sessionToSsmlText([{ de: 'Erste' }, { de: 'Zweite' }], 1, 5000),
   'Erste\n\n<break time="5s" />\n\nZweite\n\n<break time="5s" />'
 );
-assert.match(html, /playerOptionsHtml\(\[1000, 2000, 3000, 5000\], state\.playerSettings\.pause, ' s'\)/);
-assert.match(html, /data-act="copy-session-ssml">Copiar SSML/);
+assert.match(html, /ssmlOptionsHtml_\(\[1000, 2000, 3000, 5000\], state\.ssmlSettings\.pause, ' s'\)/);
+assert.ok(html.includes('data-act="copy-session-ssml"'));
+
+const settingsSource = html.slice(html.indexOf('  function ssmlSettings_()'), html.indexOf('  function shuffledItems_('));
+const settings = storage => Function('localStorage', settingsSource + '\nreturn ssmlSettings_();')(storage);
+assert.deepEqual(settings({getItem: key => key === 'sprache-lernen-player-settings' ? '{"pause":3000,"reps":4,"rate":1.25}' : null}), {pause:3000, reps:4});
+assert.deepEqual(settings({getItem: () => '{"pause":0,"reps":9}'}), {pause:1000, reps:1});
+assert.deepEqual(settings({getItem: () => 'invalid JSON'}), {pause:1000, reps:1});
 
 console.log('Copied phrase formatting: OK');

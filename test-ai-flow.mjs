@@ -107,7 +107,6 @@ function generatorClient() {
     function byId(id) { return state.items.find(item => item.id === id); }
     function setPhraseCollectionIds_() {}
     function decorateCollections_() {}
-    function refreshOpenCollection_() {}
     function clearPrintResult_() { state.printPreview = null; }
     function targetName_() { return 'alemán'; }
     function translationName_() { return 'español'; }

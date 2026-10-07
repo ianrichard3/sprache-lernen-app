@@ -21,7 +21,7 @@ jobs:
           node-version: 22
       - name: Check copied text format
         run: node test-copy-text.mjs
-      - name: Check study flow
+      - name: Check filtered phrase practice and SSML
         run: node test-study-flow.mjs
       - name: Check collections flow
         run: node test-collections-flow.mjs

@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  :root { --ink:#16202b; --paper:#fff; --surface:#f6f8fa; --rule:#dfe5ec; --muted:#64748b; --good:#0f766e; --good-soft:#e2f2f0; --bad:#b45309; --bad-soft:#fdf0dd; --danger:#b3261e; --focus:#2563eb; }
+  :root { --ink:#16202b; --paper:#fff; --surface:#f6f8fa; --rule:#dfe5ec; --muted:#64748b; --good:#0f766e; --good-soft:#e2f2f0; --danger:#b3261e; --focus:#2563eb; }
   * { box-sizing:border-box; }
   html,body { margin:0; min-height:100%; background:var(--surface); color:var(--ink); }
   body { font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
@@ -24,9 +24,7 @@
   .nav.on:hover,.primary:hover { background:#0d1620; }
   .screen { max-width:1180px; margin:0 auto; padding:20px; }
   .ghost { background:var(--paper); color:var(--ink); border-color:var(--rule); }
-  .ghost:hover,.phrase-choice:hover,.history-card:hover { background:var(--surface); }
-  .good { background:var(--good); color:#fff; font-weight:650; }
-  .bad { background:var(--bad); color:#fff; font-weight:650; }
+  .ghost:hover { background:var(--surface); }
   .link { padding:3px 5px; background:transparent; color:var(--muted); text-decoration:underline; }
   .link:hover { color:var(--ink); }
   .danger { color:var(--danger); }
@@ -36,30 +34,11 @@
   .section-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
   .card,.panel { background:var(--paper); border:1px solid var(--rule); border-radius:9px; }
   .empty { padding:36px 16px; color:var(--muted); text-align:center; }
-  .phrase-list,.history,.manage-list { overflow:hidden; }
+  .manage-list { overflow:hidden; }
   .pagination { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:10px 14px; border-top:1px solid var(--rule); }
   .pagination .muted { margin-right:auto; font-size:12px; }
-  .phrase-choice { display:block; width:100%; padding:14px 16px; border-width:0 0 1px; border-radius:0; border-color:var(--rule); background:var(--paper); color:var(--ink); text-align:left; }
-  .phrase-choice:last-child,.manage-item:last-child { border-bottom:0; }
-  .id { display:block; margin-top:3px; color:var(--muted); font:11px ui-monospace,SFMono-Regular,Consolas,monospace; }
-  .history .section-head { padding:14px 14px 0; }
-  .history-list { max-height:calc(100vh - 170px); overflow-y:auto; }
-  .history-card { display:block; width:100%; padding:10px 14px; border-width:1px 0 0; border-radius:0; border-color:var(--rule); background:var(--paper); color:var(--ink); text-align:left; }
-  .history-card p { margin:0 0 5px; }
-  .history-meta { display:flex; align-items:center; gap:7px; color:var(--muted); font-size:11px; }
-  .badge { border-radius:999px; padding:1px 7px; font-size:11px; font-weight:700; }
-  .badge.good { background:var(--good-soft); color:var(--good); }
-  .badge.bad { background:var(--bad-soft); color:var(--bad); }
-  .study-tabs { display:flex; gap:4px; margin-bottom:12px; border-bottom:1px solid var(--rule); }
-  .study-tab { margin-bottom:-1px; border-color:transparent; border-radius:6px 6px 0 0; background:transparent; color:var(--muted); font-weight:650; }
-  .study-tab.on { border-color:var(--rule); border-bottom-color:var(--paper); background:var(--paper); color:var(--ink); }
-  .study-search { margin-bottom:12px; }
-  .study-card { max-width:720px; margin:28px auto; padding:28px; text-align:center; }
-  .question { margin:26px 0; font-size:clamp(24px,5vw,38px); line-height:1.25; font-weight:700; }
-  .answer { margin:0 0 22px; font:28px/1.3 Georgia,"Times New Roman",serif; }
   .pronunciation { display:block; margin:4px 0 10px; color:var(--muted); white-space:pre-wrap; font-size:15px; }
-  .notes { margin:0 0 22px; color:var(--muted); }
-  .study-actions,.form-actions { display:flex; justify-content:center; gap:8px; flex-wrap:wrap; }
+  .form-actions { display:flex; justify-content:center; gap:8px; flex-wrap:wrap; }
   .manage-grid { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:20px; align-items:start; }
   .manage-item { padding:14px 16px; border-bottom:1px solid var(--rule); }
   .manage-item h3 { margin:0; font:17px/1.3 Georgia,"Times New Roman",serif; }
@@ -78,20 +57,10 @@
   .mapping { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:14px 0; }
   .preview { margin-top:12px; overflow-x:auto; }
   .collection-list { overflow:hidden; }
-  .collection-choice { display:flex; align-items:center; gap:12px; width:100%; padding:14px 16px; border-width:0 0 1px; border-radius:0; border-color:var(--rule); background:var(--paper); color:var(--ink); text-align:left; }
+  .collection-choice { display:flex; align-items:center; gap:12px; width:100%; padding:14px 16px; border-bottom:1px solid var(--rule); background:var(--paper); color:var(--ink); text-align:left; }
   .collection-choice:last-child { border-bottom:0; }
   .collection-choice:hover { background:var(--surface); }
   .collection-count { margin-left:auto; color:var(--muted); font-size:12px; white-space:nowrap; }
-  .collection-player { margin:20px 0; }
-  .player-progress { color:var(--muted); font-size:12px; }
-  .player-settings { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; margin:14px 0; text-align:left; }
-  .collection-editor { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:20px; align-items:start; }
-  .collection-members,.collection-candidates { overflow:hidden; }
-  .collection-row { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--rule); }
-  .collection-row:last-child { border-bottom:0; }
-  .collection-row p { margin:2px 0 0; color:var(--muted); }
-  .collection-candidates label.collection-row { color:var(--ink); font-size:14px; font-weight:400; letter-spacing:0; text-transform:none; }
-  .collection-row-actions { display:flex; gap:3px; margin-left:auto; }
   .collection-picker { display:grid; gap:6px; max-height:180px; overflow:auto; padding:8px; border:1px solid var(--rule); border-radius:6px; }
   .collection-picker label { display:flex; align-items:center; gap:7px; margin:0; color:var(--ink); font-size:13px; font-weight:400; letter-spacing:0; text-transform:none; }
   .print-grid { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:20px; align-items:start; }
@@ -125,37 +94,30 @@
   .print-preview-content [data-pronunciation-field]:empty::before { content:attr(data-placeholder); color:var(--muted); font-size:.7em; }
   .print-preview-content tr { break-inside:avoid; page-break-inside:avoid; }
   @media (max-width:760px) { .print-settings { grid-template-columns:1fr; } .print-preview-content { padding:16px; } }
-  .session-layout { display:grid; grid-template-columns:270px minmax(0,1fr); gap:20px; align-items:start; }
-  .session-controls { position:sticky; top:16px; padding:14px; text-align:left; }
-  .session-controls.collapsed .session-control-body { display:none; }
-  .session-control-head,.session-list-head,.session-choice { display:flex; align-items:center; gap:10px; }
-  .session-control-head { justify-content:space-between; flex-wrap:wrap; }
-  .session-control-head .study-actions { justify-content:flex-end; }
-  .session-control-body { margin-top:14px; }
-  .session-control-body .field { margin-bottom:10px; }
-  .session-list { overflow:hidden; }
-  .session-list-head { justify-content:space-between; flex-wrap:wrap; padding:13px 14px; border-bottom:1px solid var(--rule); }
-  .session-language-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
-  .session-choice { position:relative; min-height:68px; padding:0; border-width:0 0 1px; border-radius:0; border-color:var(--rule); background:var(--paper); color:var(--ink); text-align:left; }
-  .session-choice:last-child { border-bottom:0; }
-  .session-choice.on { background:var(--surface); }
-  .session-choice.playing { box-shadow:inset 4px 0 var(--good); background:var(--good-soft); }
-  .session-row-select { flex:1; min-width:0; padding:13px 14px; border:0; border-radius:0; background:transparent; color:inherit; text-align:left; }
-  .session-row-select:hover { background:rgba(255,255,255,.38); }
+  [hidden] { display:none !important; }
+  summary { cursor:pointer; font-weight:650; }
+  details[open] > summary { margin-bottom:12px; }
+  .collection-filter { margin:12px 0; }
+  .collection-title { flex:1; }
+  .tool-nav { margin-bottom:20px; }
+  .practice-options { display:flex; align-items:flex-end; gap:12px; margin:12px 0; }
+  .practice-options > input { flex:1; }
+  .ssml-settings { display:flex; gap:12px; margin-top:12px; }
+  .session-list { overflow:hidden; margin-top:16px; }
+  .session-list-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:13px 14px; border-bottom:1px solid var(--rule); }
+  .session-language-actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .session-choice { display:block; width:100%; padding:13px 14px; border-width:0 0 1px; border-radius:0; border-color:var(--rule); background:var(--paper); color:var(--ink); text-align:left; }
+  .session-choice:hover,.session-choice.revealed { background:var(--surface); }
   .session-row-de { display:block; font:18px/1.35 Georgia,"Times New Roman",serif; }
   .session-row-es { display:block; margin-top:3px; color:var(--muted); font-size:14px; }
-  .session-row-meta { display:block; margin-top:3px; color:var(--muted); font-size:11px; }
-  .session-row-play { align-self:stretch; min-width:88px; border-width:0 0 0 1px; border-radius:0; border-color:var(--rule); background:var(--paper); color:var(--ink); font-weight:650; }
-  .session-choice.playing .session-row-play { background:var(--good); color:#fff; }
-  .session-quick-control { display:flex; align-items:center; gap:8px; }
-  .session-quick-control .primary { white-space:nowrap; }
+  .session-row-meta { color:var(--muted); font-size:12px; }
   table { width:100%; border-collapse:collapse; font-size:11px; }
   th,td { padding:5px 6px; border:1px solid var(--rule); text-align:left; vertical-align:top; }
   #note { position:fixed; left:50%; bottom:18px; display:none; max-width:min(90vw,600px); padding:9px 13px; border-radius:7px; transform:translateX(-50%); box-shadow:0 4px 16px rgba(15,23,42,.16); }
   #note.show { display:block; }
   #note.ok { background:var(--good-soft); color:var(--good); }
   #note.err { background:#fdecea; color:var(--danger); }
-  @media (max-width:760px) { .topbar { padding:10px 14px; flex-wrap:wrap; gap:8px; } .screen { padding:14px; } .manage-grid,.collection-editor,.session-layout,.print-grid { grid-template-columns:1fr; } .manage-side { order:-1; } .history-list { max-height:none; } .study-card { margin:8px 0; padding:22px 16px; } .collection-player { margin:8px 0; } .study-list-panel { padding-bottom:66px; } .study-random { position:fixed; right:14px; bottom:14px; left:14px; z-index:1; } .player-settings { grid-template-columns:1fr; } .session-controls { top:0; z-index:2; margin:0 -14px; border-width:0 0 1px; border-radius:0; } .session-controls.collapsed { padding:8px 14px; } .session-layout { gap:12px; } .session-list-head { align-items:flex-start; } .session-language-actions { max-width:190px; } .session-choice { min-height:72px; } .session-row-play { min-width:82px; } }
+  @media (max-width:760px) { .topbar { padding:10px 14px; flex-wrap:wrap; gap:8px; } .screen { padding:14px; } .manage-grid,.print-grid { grid-template-columns:1fr; } .manage-side { order:-1; } .practice-options { flex-wrap:wrap; } .practice-options > input { flex-basis:100%; } .collection-choice { flex-wrap:wrap; } }
 </style>
 </head>
 <body>
@@ -163,17 +125,22 @@
   <header class="topbar">
     <div class="brand">Sprache Lernen App</div>
     <nav aria-label="Secciones">
-      <button class="nav" data-act="switch-view" data-view="study">Estudiar</button>
+      <button class="nav" data-act="switch-view" data-view="manage">Todas las Frases</button>
       <button class="nav" data-act="switch-view" data-view="collections">Colecciones</button>
-      <button class="nav" data-act="switch-view" data-view="manage">Gestionar</button>
-      <button class="nav" data-act="switch-view" data-view="print">Material</button>
-      <button class="nav" data-act="switch-view" data-view="generate">Generar</button>
-      <button class="nav" data-act="switch-view" data-view="etymology">Etimología</button>
+      <button class="nav" data-act="switch-view" data-view="practice">Estudiar Frases</button>
+      <button class="nav" data-act="switch-view" data-view="tools">Herramientas</button>
       <button class="nav" data-act="switch-view" data-view="settings">Configuración</button>
     </nav>
     <button class="link" data-act="refresh-data">Actualizar datos</button>
   </header>
-  <main class="screen" id="screen"></main>
+  <main class="screen">
+    <nav class="tool-nav" id="tool-nav" aria-label="Herramientas" hidden>
+      <button class="ghost" data-act="switch-view" data-view="print">Preparar material para imprimir</button>
+      <button class="ghost" data-act="switch-view" data-view="generate">Generar frases con IA</button>
+      <button class="ghost" data-act="switch-view" data-view="etymology">Explorar la etimología</button>
+    </nav>
+    <div id="screen"></div>
+  </main>
   <div id="note" role="status" aria-live="polite"></div>
 </div>
 
@@ -184,23 +151,21 @@
   var state = {
     loadingData: false,
     setup: null, language: {name:'alemán', locale:'de-DE', translation:{name:'español', locale:'es-ES'}, version:0}, languageChoice:'de-DE', customName:'', customLocale:'', configSaving:false, languageBusy:0, translationChoice:'es-ES', customTranslationName:'', customTranslationLocale:'', showPronunciation:true,
-    items: [], history: [], view: 'study', detailId: null, revealed: false,
-    saving: false, editing: null, editingCollectionIds: null, studyTab: 'phrases', studyPage: 1, studyQuery: '', managePage: 1, manageQuery: '', importText: '',
-    importPreview: null, importHasHeader: true, importDelimiter: ',',
+    items: [], view: 'manage', toolView:'print',
+    editing: null, editingCollectionIds: null, managePage: 1, manageQuery: '', manageCollectionIds:[], importText: '',
+    importPreview: null, importHasHeader: true, importDelimiter: ',', importOpen:false, importColumns:{de:0, es:1, pronunciation:-1, kana:-1},
     generator: { context:'', level:'intermediate', generatedLevel:null, generatedLanguageVersion:null, items:[], collectionIds:[], busy:false, saving:false, debug:'' },
     etymologyText: '', etymologyResult: '',
-    collections: [], memberIdsByCollection: {}, collectionsLoaded: false, collectionQuery: '', collectionId: null, collection: null, collectionEditor: null, collectionPhraseQuery: '', collectionPage: 1, collectionEditorPage: 1, collectionCandidatePage: 1, collectionSelection: {}, collectionPhraseDraft: false,
+    collections: [], memberIdsByCollection: {}, collectionQuery: '', collectionId: null, collectionEditor: null,
     printScope: 'all', printCollectionIds: [], printOnlyUnprinted: false, printOrder: 'manual', printFormat: 'html', printFontSize: 20, printLineHeight: 1.6, printRevision: 0, printGenerating: false, printPreviewLoading: false, printPreviewSaving: false, printPreview: null, printResult: null,
-    session: { phase:'free', order:'manual', items:[], supports:{ german:true, spanish:false }, controlsOpen:true, revealedIndex:null },
-    playerSettings: playerSettings_()
+    session: { order:'random', items:[], supports:{ german:true, spanish:false, pronunciation:true }, revealedIds:{}, query:'', collectionIds:[], page:1, ssmlOpen:false },
+    ssmlSettings: ssmlSettings_()
   };
-  var player = { index:0, repetition:0, playing:false, timer:null, token:0, voice:null, uiIndex:null };
   var PAGE_SIZE = 25;
   var el = {
     app: document.getElementById('app'), screen: document.getElementById('screen'),
     note: document.getElementById('note')
   };
-  var ALL_COLLECTION_ID = '__all__';
   var LANGUAGES = [
     {name:'alemán', locale:'de-DE'}, {name:'inglés', locale:'en-US'},
     {name:'francés', locale:'fr-FR'}, {name:'italiano', locale:'it-IT'},
@@ -212,9 +177,9 @@
   function translationName_() { return state.language.translation.name; }
   function japanese_() { return state.language.locale.split('-')[0] === 'ja'; }
 
-  function pronunciationHtml_(item) {
+  function pronunciationHtml_(item, visible) {
     var parts = (japanese_() ? [item.kana, item.pronunciation] : [item.pronunciation]).filter(Boolean);
-    return state.showPronunciation && parts.length ? '<span class="pronunciation">' + parts.map(esc).join('<br>') + '</span>' : '';
+    return (visible == null ? state.showPronunciation : visible) && parts.length ? '<span class="pronunciation">' + parts.map(esc).join('<br>') + '</span>' : '';
   }
 
   function pronunciationToggleHtml_() {
@@ -313,12 +278,13 @@
         ? state.items.filter(function (item) { return !assigned[collectionKey_(item.id)]; }).length
         : (counts[collectionKey_(collection.id)] || 0);
     });
+    state.manageCollectionIds = state.manageCollectionIds.filter(function (id) { return !!collectionById_(id); });
+    state.session.collectionIds = state.session.collectionIds.filter(function (id) { return !!collectionById_(id); });
+    refreshPractice_();
+    if (state.view === 'practice') renderPracticeList();
   }
 
   function localCollection_(id) {
-    if (collectionKey_(id) === collectionKey_(ALL_COLLECTION_ID)) {
-      return { collection:{ id:ALL_COLLECTION_ID, name:'Todas', count:state.items.length, all:true }, items:state.items.slice() };
-    }
     var collection = collectionById_(id);
     if (!collection) return null;
     var assigned = assignedPhraseIds_();
@@ -328,12 +294,6 @@
     var items = ids.map(byId).filter(Boolean);
     if (collection.unassigned) items.sort(function (a, b) { return b.id.localeCompare(a.id); });
     return { collection: collection, items: items };
-  }
-
-  function refreshOpenCollection_() {
-    if (!state.collectionId) return;
-    state.collection = localCollection_(state.collectionId);
-    resetSession_('free', 'manual', true);
   }
 
   function applyAppData_(data) {
@@ -347,7 +307,6 @@
     state.setup = null;
     languageDraft_(data.language || {name:'alemán', locale:'de-DE', version:0});
     state.items = data.items || [];
-    state.history = data.history || [];
     state.collections = data.collections || [];
     state.memberIdsByCollection = data.memberIdsByCollection || {};
     state.collections.forEach(function (collection) {
@@ -355,13 +314,11 @@
         state.memberIdsByCollection[collectionKey_(collection.id)] = [];
       }
     });
-    state.collectionsLoaded = true;
     state.printCollectionIds = state.printCollectionIds.filter(function (id) {
       return collectionKey_(id) === collectionKey_('__unassigned__') || !!collectionById_(id);
     });
     decorateCollections_();
     if (state.editing && byId(state.editing)) state.editingCollectionIds = collectionIdsForPhrase_(state.editing);
-    if (state.collectionId) state.collection = localCollection_(state.collectionId);
   }
 
   function esc(text) {
@@ -377,37 +334,14 @@
     say.timer = setTimeout(function () { el.note.className = ''; }, 3500);
   }
 
-  function playerSettings_() {
-    var defaults = { rate:1, pause:1000, reps:1 };
+  function ssmlSettings_() {
+    var defaults = { pause:1000, reps:1 };
     try {
-      var saved = JSON.parse(localStorage.getItem('sprache-lernen-player-settings') || localStorage.getItem('deutsch-player-settings') || '{}');
-      if ([0.75, 1, 1.25].indexOf(Number(saved.rate)) !== -1) defaults.rate = Number(saved.rate);
+      var saved = JSON.parse(localStorage.getItem('sprache-lernen-ssml-settings') || localStorage.getItem('sprache-lernen-player-settings') || localStorage.getItem('deutsch-player-settings') || '{}');
       if ([1000, 2000, 3000, 5000].indexOf(Number(saved.pause)) !== -1) defaults.pause = Number(saved.pause);
       if ([1, 2, 3, 4, 5].indexOf(Number(saved.reps)) !== -1) defaults.reps = Number(saved.reps);
     } catch (err) {}
     return defaults;
-  }
-
-  function savePlayerSettings_() {
-    try { localStorage.setItem('sprache-lernen-player-settings', JSON.stringify(state.playerSettings)); } catch (err) {}
-  }
-
-  function targetVoice_() {
-    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return null;
-    var voices = window.speechSynthesis.getVoices();
-    function language(voice) { return String(voice.lang || '').toLowerCase().replace('_', '-'); }
-    var locale = state.language.locale.toLowerCase();
-    var base = locale.split('-')[0];
-    var exact = voices.find(function (voice) { return language(voice) === locale; });
-    return exact || voices.find(function (voice) { return language(voice).split('-')[0] === base; }) || null;
-  }
-
-  function phaseDefaults_(phase) {
-    if (phase === 'understand') return { german:true, spanish:true };
-    if (phase === 'listen') return { german:false, spanish:false };
-    if (phase === 'shadow') return { german:true, spanish:false };
-    if (phase === 'recall') return { german:false, spanish:true };
-    return { german:true, spanish:false };
   }
 
   function shuffledItems_(items) {
@@ -425,226 +359,17 @@
     return state.session.items;
   }
 
-  function resetPhraseSupports_() {
-    state.session.supports = phaseDefaults_(state.session.phase);
-    state.session.revealedIndex = null;
-  }
-
-  function resetSession_(phase, order, resetSupports) {
-    var phaseChanged = phase && phase !== state.session.phase;
-    state.session.phase = phase || state.session.phase;
-    state.session.order = order || state.session.order;
-    var items = state.collection ? state.collection.items : [];
+  function refreshPractice_() {
+    var items = matchingItems(filterCollectionItems_(state.items, state.session.collectionIds), state.session.query);
     state.session.items = state.session.order === 'random' ? shuffledItems_(items) : items.slice();
-    player.index = 0;
-    player.repetition = 0;
-    state.collectionPage = 1;
-    if (resetSupports || phaseChanged) resetPhraseSupports_(); else state.session.revealedIndex = null;
-  }
-
-  function currentPlayerItem_() {
-    return sessionItems_()[player.index] || null;
-  }
-
-  function nextPlaybackPosition(length, index, repetition, repetitions) {
-    repetition++;
-    if (repetition >= repetitions) return { index:(index + 1) % length, repetition:0 };
-    return { index:index, repetition:repetition };
-  }
-
-  function playerVoiceReady_() {
-    player.voice = targetVoice_();
-    return player.voice;
-  }
-
-  function recallPhase_() {
-    return state.session.phase === 'recall';
-  }
-
-  function germanVisible_(index) {
-    return recallPhase_() ? state.session.revealedIndex === index : state.session.supports.german;
-  }
-
-  function currentAudioAvailable_() {
-    return !!currentPlayerItem_() && (!recallPhase_() || germanVisible_(player.index));
-  }
-
-  function replaceSessionRow_(index) {
-    var item = sessionItems_()[index];
-    var row = document.querySelector('#session-list .session-choice[data-index="' + index + '"]');
-    if (item && row) row.outerHTML = sessionRowHtml_(item, index);
-  }
-
-  function updateSessionRows_(scrollActive) {
-    var activePage = Math.floor(player.index / PAGE_SIZE) + 1;
-    if (state.collectionPage !== activePage && scrollActive) {
-      state.collectionPage = activePage;
-      return renderCollections();
-    }
-    if (player.uiIndex !== player.index) replaceSessionRow_(player.uiIndex);
-    replaceSessionRow_(player.index);
-    player.uiIndex = player.index;
-    var active = document.querySelector('#session-list .session-choice[data-index="' + player.index + '"]');
-    if (scrollActive && active && active.scrollIntoView) active.scrollIntoView({ block:'center', behavior:'smooth' });
-  }
-
-  function redrawSessionRows_() {
-    var list = document.getElementById('session-list');
-    if (list) list.innerHTML = sessionListHtml_();
-    player.uiIndex = player.index;
-  }
-
-  function updatePlayerUi_(scrollActive) {
-    var item = currentPlayerItem_();
-    var progress = document.getElementById('player-progress');
-    var quick = document.getElementById('session-quick-control');
-    var germanSupport = document.getElementById('support-german');
-    var spanishSupport = document.getElementById('support-spanish');
-    var items = sessionItems_();
-    playerVoiceReady_();
-    if (progress) progress.textContent = item ? (player.index + 1) + ' de ' + items.length : '';
-    if (quick) quick.innerHTML = sessionQuickControlHtml_();
-    if (germanSupport) germanSupport.textContent = recallPhase_() ? (germanVisible_(player.index) ? 'Ocultar ' + targetName_() : 'Revelar ' + targetName_()) : (state.session.supports.german ? 'Ocultar ' + targetName_() : 'Mostrar ' + targetName_());
-    if (spanishSupport) spanishSupport.textContent = (state.session.supports.spanish ? 'Ocultar ' : 'Mostrar ') + translationName_();
-    updateSessionRows_(scrollActive);
-  }
-
-  function stopPlayer_() {
-    player.playing = false;
-    player.token++;
-    if (player.timer) clearTimeout(player.timer);
-    player.timer = null;
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
-    updatePlayerUi_();
-  }
-
-  function playPlayerCycle_(token) {
-    if (!player.playing || token !== player.token) return;
-    var item = currentPlayerItem_();
-    if (!item || !playerVoiceReady_()) return stopPlayer_();
-
-    var utterance = new SpeechSynthesisUtterance(item.de);
-    utterance.lang = player.voice.lang || state.language.locale;
-    utterance.voice = player.voice;
-    utterance.rate = state.playerSettings.rate;
-    utterance.onend = function () {
-      if (!player.playing || token !== player.token) return;
-      player.timer = setTimeout(function () {
-        if (!player.playing || token !== player.token) return;
-        if (recallPhase_() && player.repetition + 1 >= state.playerSettings.reps) {
-          player.playing = false;
-          player.repetition = 0;
-          player.timer = null;
-          return updatePlayerUi_();
-        }
-        var next = nextPlaybackPosition(sessionItems_().length, player.index, player.repetition, state.playerSettings.reps);
-        player.index = next.index;
-        player.repetition = next.repetition;
-        player.timer = null;
-        updatePlayerUi_(next.repetition === 0);
-        playPlayerCycle_(token);
-      }, state.playerSettings.pause);
-    };
-    utterance.onerror = function (event) {
-      if (!player.playing || token !== player.token || event.error === 'canceled' || event.error === 'interrupted') return;
-      stopPlayer_();
-      say('No se pudo reproducir la voz en ' + targetName_() + '.', 'err');
-    };
-    updatePlayerUi_();
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-  }
-
-  function startPlayer_() {
-    if (!currentAudioAvailable_()) return;
-    if (!playerVoiceReady_()) { updatePlayerUi_(); return; }
-    player.playing = true;
-    var token = ++player.token;
-    playPlayerCycle_(token);
-  }
-
-  function togglePlayer_() {
-    if (player.playing) stopPlayer_(); else startPlayer_();
-  }
-
-  function movePlayer_(direction) {
-    if (!sessionItems_().length) return;
-    var resume = player.playing;
-    stopPlayer_();
-    player.index = (player.index + direction + sessionItems_().length) % sessionItems_().length;
-    player.repetition = 0;
-    if (recallPhase_()) state.session.revealedIndex = null;
-    updatePlayerUi_(true);
-    if (resume && !recallPhase_()) startPlayer_();
-  }
-
-  function restartPlayer_() {
-    var resume = player.playing;
-    stopPlayer_();
-    player.repetition = 0;
-    updatePlayerUi_();
-    if (resume) startPlayer_();
-  }
-
-  function restartSession_() {
-    var resume = player.playing;
-    stopPlayer_();
-    player.index = 0;
-    player.repetition = 0;
-    if (recallPhase_()) state.session.revealedIndex = null;
-    updatePlayerUi_(true);
-    if (resume && !recallPhase_()) startPlayer_();
-  }
-
-  function setPlayerSetting_(name, value) {
-    var next = Number(value);
-    if (state.playerSettings[name] === next) return;
-    var resume = player.playing;
-    stopPlayer_();
-    state.playerSettings[name] = next;
-    savePlayerSettings_();
-    updatePlayerUi_();
-    if (resume) startPlayer_();
-  }
-
-  function setPhase_(phase) {
-    stopPlayer_();
-    resetSession_(phase, state.session.order, true);
-    renderCollections();
-  }
-
-  function setSessionOrder_(order) {
-    stopPlayer_();
-    resetSession_(state.session.phase, order, false);
-    renderCollections();
-  }
-
-  function selectSessionItem_(index) {
-    if (index < 0 || index >= sessionItems_().length) return;
-    stopPlayer_();
-    player.index = index;
-    player.repetition = 0;
-    if (recallPhase_()) state.session.revealedIndex = null;
-    updatePlayerUi_(true);
-    if (!recallPhase_()) startPlayer_();
-  }
-
-  function toggleSessionItem_(index) {
-    if (index !== player.index) return selectSessionItem_(index);
-    togglePlayer_();
+    state.session.page = 1;
+    state.session.revealedIds = {};
   }
 
   function toggleSupport_(support) {
-    if (recallPhase_() && support === 'german') {
-      if (germanVisible_(player.index)) {
-        stopPlayer_();
-        state.session.revealedIndex = null;
-      } else state.session.revealedIndex = player.index;
-      return updatePlayerUi_();
-    }
     state.session.supports[support] = !state.session.supports[support];
-    redrawSessionRows_();
-    updatePlayerUi_();
+    state.session.revealedIds = {};
+    renderPracticeList();
   }
 
   function byId(id) {
@@ -652,20 +377,6 @@
       if (state.items[i].id === id) return state.items[i];
     }
     return null;
-  }
-
-  function randomCandidate(items, history) {
-    var recent = {};
-    history.forEach(function (entry) { recent[entry.id] = true; });
-    var candidates = items.filter(function (item) { return !recent[item.id]; });
-    return candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : null;
-  }
-
-  function dateLabel(value) {
-    var date = new Date(value);
-    return isNaN(date.getTime()) ? '' : date.toLocaleString('es-AR', {
-      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-    });
   }
 
   function phrasesToText(items) {
@@ -715,8 +426,8 @@
   }
 
   function copySessionSsml_() {
-    var text = sessionToSsmlText_(sessionItems_(), state.playerSettings.reps, state.playerSettings.pause);
-    if (!text) return say('No hay frases en esta colección para copiar.', 'err');
+    var text = sessionToSsmlText_(sessionItems_(), state.ssmlSettings.reps, state.ssmlSettings.pause);
+    if (!text) return say('No hay frases filtradas para copiar.', 'err');
     return copyText(text).then(function () { say('Guion SSML copiado.'); }).catch(function () { say('No se pudo copiar el guion SSML.', 'err'); });
   }
 
@@ -729,12 +440,33 @@
     });
   }
 
-  function managedItems() {
-    return matchingItems(state.items, state.manageQuery);
+  function filterCollectionItems_(items, collectionIds) {
+    if (!collectionIds.length) return items;
+    var included = {}, unassigned = false;
+    collectionIds.forEach(function (id) {
+      if (collectionKey_(id) === collectionKey_('__unassigned__')) unassigned = true;
+      else (state.memberIdsByCollection[collectionKey_(id)] || []).forEach(function (phraseId) { included[collectionKey_(phraseId)] = true; });
+    });
+    var assigned = unassigned ? assignedPhraseIds_() : {};
+    return items.filter(function (item) {
+      var key = collectionKey_(item.id);
+      return included[key] || (unassigned && !assigned[key]);
+    });
   }
 
-  function studyItems() {
-    return matchingItems(state.items, state.studyQuery);
+  function managedItems() {
+    return matchingItems(filterCollectionItems_(state.items, state.manageCollectionIds), state.manageQuery);
+  }
+
+  function collectionFilterLabel_(ids) {
+    return 'Colecciones · ' + (ids.length ? ids.map(function (id) { return collectionById_(id).name; }).join(', ') : 'Todas');
+  }
+
+  function collectionFilterHtml_(list, ids) {
+    var options = state.collections.map(function (collection) {
+      return '<label><input type="checkbox" data-phrase-filter="' + list + '" value="' + esc(collection.id) + '"' + (ids.indexOf(collection.id) !== -1 ? ' checked' : '') + '> ' + esc(collection.name) + ' (' + collection.count + ')</label>';
+    }).join('');
+    return '<details class="collection-filter"><summary id="' + list + '-collection-summary">' + esc(collectionFilterLabel_(ids)) + '</summary><div class="collection-picker">' + options + '</div><button class="link" data-act="clear-phrase-filter" data-list="' + list + '">Mostrar todas</button></details>';
   }
 
   function paginate(items, requestedPage) {
@@ -750,80 +482,6 @@
       '<button class="ghost" data-act="page" data-list="' + list + '" data-direction="1"' + (page.page === page.total ? ' disabled' : '') + '>Siguiente</button></div>';
   }
 
-  function historyHtml() {
-    if (!state.history.length) return '<div class="empty">Todavía no estudiaste frases.</div>';
-    var cards = state.history.map(function (entry) {
-      var item = byId(entry.id);
-      if (!item) return '';
-      return '<button class="history-card" data-act="study" data-id="' + esc(item.id) + '">' +
-        '<p>' + esc(item.es || 'Sin traducción') + '</p><span class="history-meta">' +
-        '<span class="badge ' + (entry.correct ? 'good' : 'bad') + '">' +
-        (entry.correct ? 'Bien' : 'Mal') + '</span>' + esc(dateLabel(entry.reviewedAt)) +
-        '</span></button>';
-    }).join('');
-    return cards || '<div class="empty">No hay frases disponibles.</div>';
-  }
-
-  function historyPanelHtml() {
-    return '<section class="card history" id="history-panel"><div class="section-head"><h2 class="section-title">Últimas 20</h2><span class="muted">' +
-      state.history.length + '/20</span></div><div class="history-list">' + historyHtml() + '</div></section>';
-  }
-
-  function studyListHtml() {
-    if (!state.items.length) {
-      return '<div class="empty"><p>No hay frases cargadas.</p>' +
-        '<button class="primary" data-act="switch-view" data-view="manage">Agregar frases</button></div>';
-    }
-    var items = studyItems();
-    if (!items.length) return '<div class="empty">No hay frases que coincidan.</div>';
-    var page = paginate(items, state.studyPage);
-    state.studyPage = page.page;
-    return page.items.map(function (item) {
-      return '<button class="phrase-choice" data-act="study" data-id="' + esc(item.id) + '">' +
-        esc(item.es || 'Sin traducción') + '</button>';
-    }).join('');
-  }
-
-  function studyPaginationHtml() {
-    var page = paginate(studyItems(), state.studyPage);
-    state.studyPage = page.page;
-    return paginationHtml('study', page);
-  }
-
-  function studyTabsHtml() {
-    return '<div class="study-tabs" role="group" aria-label="Modo estudio">' +
-      '<button class="study-tab' + (state.studyTab === 'phrases' ? ' on' : '') + '" aria-pressed="' + (state.studyTab === 'phrases') + '" data-act="study-tab" data-tab="phrases">Frases</button>' +
-      '<button class="study-tab' + (state.studyTab === 'history' ? ' on' : '') + '" aria-pressed="' + (state.studyTab === 'history') + '" data-act="study-tab" data-tab="history">Historial</button></div>';
-  }
-
-  function studyListPanelHtml() {
-    return '<section class="study-list-panel" id="study-phrases"><div class="section-head"><h1 class="section-title">Elegí una frase</h1><button class="primary study-random" data-act="random">Random</button></div>' +
-      '<input class="study-search" id="study-search" type="search" placeholder="Buscar frases…" value="' + esc(state.studyQuery) + '"><div class="card phrase-list" id="study-list">' + studyListHtml() + studyPaginationHtml() + '</div></section>';
-  }
-
-  function renderStudyList() {
-    var target = document.getElementById('study-list');
-    if (target) target.innerHTML = studyListHtml() + studyPaginationHtml();
-  }
-
-  function renderStudy() {
-    var item = state.detailId ? byId(state.detailId) : null;
-    if (state.detailId && !item) { state.detailId = null; state.revealed = false; }
-    var content;
-    if (state.studyTab === 'history') content = historyPanelHtml();
-    else if (item) {
-      content = '<section class="card study-card" id="study-phrases"><button class="link" data-act="back-study">← Volver al listado</button>' +
-        '<p class="question" lang="' + esc(state.language.translation.locale) + '">' + esc(item.es || 'Sin traducción') + '</p>' +
-        (state.revealed
-          ? '<p class="answer" lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</p>' + pronunciationHtml_(item) + pronunciationToggleHtml_() + (item.notes ? '<p class="notes">' + esc(item.notes) + '</p>' : '') +
-            '<div class="study-actions"><button class="good" data-act="result" data-correct="true"' + (state.saving ? ' disabled' : '') + '>Lo hice bien</button>' +
-            '<button class="bad" data-act="result" data-correct="false"' + (state.saving ? ' disabled' : '') + '>Me costó</button><button class="ghost" data-act="edit" data-id="' + esc(item.id) + '">Editar frase</button></div>'
-          : '<div class="study-actions"><button class="primary" data-act="reveal">Ver ' + esc(targetName_()) + '</button></div>') +
-        '</section>';
-    } else content = studyListPanelHtml();
-    el.screen.innerHTML = '<div class="study">' + studyTabsHtml() + content + '</div>';
-  }
-
   function phraseCollectionPickerHtml_(selectedIds) {
     var selected = {};
     selectedIds.forEach(function (id) { selected[collectionKey_(id)] = true; });
@@ -834,31 +492,30 @@
       (options ? '<div class="collection-picker">' + options + '</div>' : '<p class="hint">Creá una colección para poder asignarla.</p>') + '</div>';
   }
 
-  function phraseEditorHtml_(item, collectionId) {
-    var inCollection = !!collectionId;
-    var selectedIds = inCollection ? [collectionId] : (item ? collectionIdsForPhrase_(item.id) : []);
+  function phraseEditorHtml_(item) {
+    var selectedIds = item ? collectionIdsForPhrase_(item.id) : [];
     return '<section class="panel form-panel"><div class="section-head"><h2 class="section-title">' + (item ? 'Editar ' + esc(item.id) : 'Nueva frase') + '</h2></div>' +
       '<div class="field"><label for="f-de">Frase en ' + esc(targetName_()) + '</label><textarea id="f-de" lang="' + esc(state.language.locale) + '">' + esc(item ? item.de : '') + '</textarea><div class="ai-actions"><button id="ai-translate-to-es" class="ghost" data-act="translate-to-es">Traducir a ' + esc(translationName_()) + '</button></div></div>' +
       '<div class="field"><label for="f-es">Traducción a ' + esc(translationName_()) + '</label><textarea id="f-es" lang="' + esc(state.language.translation.locale) + '">' + esc(item ? item.es : '') + '</textarea><div class="ai-actions"><button id="ai-translate" class="ghost" data-act="translate">Traducir a ' + esc(targetName_()) + '</button></div></div>' +
       pronunciationFieldsHtml_(item, null, '') +
       '<div class="field"><label for="f-notes">Notas</label><input id="f-notes" type="text" value="' + esc(item ? item.notes : '') + '"></div>' +
       '<div class="field"><label for="f-tags">Etiquetas</label><input id="f-tags" type="text" value="' + esc(item ? item.tags.join(', ') : '') + '" placeholder="viaje, trabajo, A2"></div>' +
-      (inCollection ? '<p class="hint">Se agregará a ' + esc(collectionById_(collectionId).name) + '.</p>' : phraseCollectionPickerHtml_(selectedIds)) +
-      '<div class="form-actions"><button class="primary" data-act="save-phrase">' + (item ? 'Guardar cambios' : 'Agregar frase') + '</button><button class="ghost" data-act="' + (inCollection ? 'cancel-collection-phrase' : 'cancel-editor') + '">Cancelar</button></div></section>';
+      phraseCollectionPickerHtml_(selectedIds) +
+      '<div class="form-actions"><button class="primary" data-act="save-phrase">' + (item ? 'Guardar cambios' : 'Agregar frase') + '</button><button class="ghost" data-act="cancel-editor">Cancelar</button></div></section>';
   }
 
   function editorHtml() {
     var item = state.editing ? byId(state.editing) : null;
     if (state.editing === null) {
       return '<section class="panel form-panel"><div class="section-head"><h2 class="section-title">Frases</h2><button class="primary" data-act="new">Nueva frase</button></div>' +
-        '<p class="hint">Las frases nuevas se pueden cargar una por una o importar abajo.</p></section>';
+        '<p class="hint">Cargá una frase o desplegá Importar CSV / TSV.</p></section>';
     }
-    return phraseEditorHtml_(item, null);
+    return phraseEditorHtml_(item);
   }
 
-  function optionHtml(count) {
+  function optionHtml(count, current) {
     var options = '';
-    for (var i = 0; i < count; i++) options += '<option value="' + i + '">Columna ' + (i + 1) + '</option>';
+    for (var i = 0; i < count; i++) options += '<option value="' + i + '"' + (i === current ? ' selected' : '') + '>Columna ' + (i + 1) + '</option>';
     return options;
   }
 
@@ -869,14 +526,14 @@
       for (var i = 0; i < preview.data.columnCount; i++) cells += '<td>' + esc(row[i] || '') + '</td>';
       return '<tr>' + cells + '</tr>';
     }).join('') : '';
-    return '<section class="panel import-panel"><h2 class="section-title">Importar CSV / TSV</h2><p class="hint">Pegá el contenido, elegí el separador y mapeá ' + esc(targetName_()) + ' y ' + esc(translationName_()) + '. Las ayudas son opcionales.</p>' +
+    return '<details class="panel import-panel" id="import-panel"' + (state.importOpen ? ' open' : '') + '><summary>Importar CSV / TSV</summary><p class="hint">Pegá el contenido, elegí el separador y mapeá ' + esc(targetName_()) + ' y ' + esc(translationName_()) + '. Las ayudas son opcionales.</p>' +
       '<textarea id="import-text" placeholder="' + esc(targetName_()) + ',' + esc(translationName_()) + '\nFrase,Traducción">' + esc(state.importText) + '</textarea><div class="import-options">' +
       '<label><input type="radio" name="delimiter" value=","' + (state.importDelimiter === ',' ? ' checked' : '') + '> Coma</label>' +
       '<label><input type="radio" name="delimiter" value="tab"' + (state.importDelimiter === '\t' ? ' checked' : '') + '> Tab</label>' +
       '<label><input id="import-header" type="checkbox"' + (state.importHasHeader ? ' checked' : '') + '> Primera fila: encabezados</label></div><button class="ghost" data-act="preview-import">Ver vista previa</button>' +
-      (preview ? '<div class="preview"><div class="mapping"><div><label for="import-de">Columna en ' + esc(targetName_()) + '</label><select id="import-de">' + optionHtml(preview.data.columnCount) + '</select></div>' +
-        '<div><label for="import-es">Columna en ' + esc(translationName_()) + '</label><select id="import-es">' + optionHtml(preview.data.columnCount) + '</select></div><div><label for="import-pronunciation">Pronunciación (opcional)</label><select id="import-pronunciation"><option value="-1">Sin columna</option>' + optionHtml(preview.data.columnCount) + '</select></div><div><label for="import-kana">Kanji con furigana (opcional)</label><select id="import-kana"><option value="-1">Sin columna</option>' + optionHtml(preview.data.columnCount) + '</select></div></div><table><tbody>' + rows + '</tbody></table>' +
-        '<div class="form-actions" style="margin-top:12px"><button class="primary" data-act="import">Importar</button></div></div>' : '') + '</section>';
+      (preview ? '<div class="preview"><div class="mapping"><div><label for="import-de">Columna en ' + esc(targetName_()) + '</label><select id="import-de">' + optionHtml(preview.data.columnCount, state.importColumns.de) + '</select></div>' +
+        '<div><label for="import-es">Columna en ' + esc(translationName_()) + '</label><select id="import-es">' + optionHtml(preview.data.columnCount, state.importColumns.es) + '</select></div><div><label for="import-pronunciation">Pronunciación (opcional)</label><select id="import-pronunciation"><option value="-1">Sin columna</option>' + optionHtml(preview.data.columnCount, state.importColumns.pronunciation) + '</select></div><div><label for="import-kana">Kanji con furigana (opcional)</label><select id="import-kana"><option value="-1">Sin columna</option>' + optionHtml(preview.data.columnCount, state.importColumns.kana) + '</select></div></div><table><tbody>' + rows + '</tbody></table>' +
+        '<div class="form-actions" style="margin-top:12px"><button class="primary" data-act="import">Importar</button></div></div>' : '') + '</details>';
   }
 
   function manageListHtml() {
@@ -900,8 +557,8 @@
   }
 
   function renderManage() {
-    el.screen.innerHTML = '<div class="manage-grid"><section><div class="section-head"><h1 class="section-title">Gestionar frases</h1>' + pronunciationToggleHtml_() + '<button class="ghost" data-act="copy">Copiar ' + esc(targetName_()) + ' al azar</button></div>' +
-      '<input id="manage-search" type="search" placeholder="Buscar frases…" value="' + esc(state.manageQuery) + '"><div class="card manage-list" id="manage-list">' + manageListHtml() + '</div></section>' +
+    el.screen.innerHTML = '<div class="manage-grid"><section><div class="section-head"><h1 class="section-title">Todas las Frases</h1>' + pronunciationToggleHtml_() + '<button class="ghost" data-act="copy">Copiar ' + esc(targetName_()) + ' al azar</button></div>' +
+      collectionFilterHtml_('manage', state.manageCollectionIds) + '<input id="manage-search" type="search" aria-label="Buscar frases" placeholder="Buscar frases…" value="' + esc(state.manageQuery) + '"><div class="card manage-list" id="manage-list">' + manageListHtml() + '</div></section>' +
       '<aside class="manage-side">' + editorHtml() + importHtml() + '</aside></div>';
   }
 
@@ -1083,7 +740,7 @@
     var estimate = printEstimate_();
     var buttonLabel = state.printGenerating ? 'Generando material…' : (state.printFormat === 'html' ? 'Descargar HTML' : 'Descargar Markdown');
     var disabled = (state.printGenerating || state.printPreviewSaving) ? ' disabled' : '';
-    el.screen.innerHTML = '<div class="print-grid"><section class="panel print-panel"><div class="section-head"><h1 class="section-title">Material de estudio</h1></div>' +
+    el.screen.innerHTML = '<div class="print-grid"><section class="panel print-panel"><div class="section-head"><h1 class="section-title">Preparar material para imprimir</h1></div>' +
       '<p class="hint">HTML mantiene el tamaño de letra y la tabla al abrirlo en el ebook o al imprimirlo. También podés editar la vista previa.</p>' +
       '<div class="field"><label>Qué incluir</label><div class="print-options">' +
       '<label class="print-option"><input type="radio" name="print-scope" value="all"' + disabled + (state.printScope === 'all' ? ' checked' : '') + '> Todas las frases</label>' +
@@ -1095,7 +752,7 @@
       (state.printFormat === 'html' ? '<div class="print-settings"><div class="field"><label for="print-font-size">Tamaño de letra</label><select id="print-font-size"' + disabled + '><option value="18"' + (state.printFontSize === 18 ? ' selected' : '') + '>18 px</option><option value="20"' + (state.printFontSize === 20 ? ' selected' : '') + '>20 px</option><option value="22"' + (state.printFontSize === 22 ? ' selected' : '') + '>22 px</option><option value="24"' + (state.printFontSize === 24 ? ' selected' : '') + '>24 px</option></select></div><div class="field"><label for="print-line-height">Espaciado</label><select id="print-line-height"' + disabled + '><option value="1.4"' + (state.printLineHeight === 1.4 ? ' selected' : '') + '>Compacto</option><option value="1.6"' + (state.printLineHeight === 1.6 ? ' selected' : '') + '>Cómodo</option><option value="1.8"' + (state.printLineHeight === 1.8 ? ' selected' : '') + '>Amplio</option><option value="2"' + (state.printLineHeight === 2 ? ' selected' : '') + '>Muy amplio</option></select></div></div>' : '') +
       printSummaryHtml_() + '<div class="print-actions"><button class="ghost" data-act="preview-material"' + (state.printPreviewLoading || state.printGenerating || state.printPreviewSaving || !estimate.unique ? ' disabled' : '') + '>' + (state.printPreviewLoading ? 'Preparando vista previa…' : 'Previsualizar') + '</button><button class="primary" data-act="generate-material"' + (state.printGenerating || state.printPreviewSaving || state.printPreviewLoading || !estimate.unique ? ' disabled' : '') + '>' + buttonLabel + '</button></div>' +
       (result ? '<div class="print-result">Material descargado: ' + result.includedCount + ' frases distintas' + (result.rowCount !== result.includedCount ? ' · ' + result.rowCount + ' filas' : '') + '.<br><a href="' + esc(result.url) + '" download="' + esc(result.name) + '">Volver a descargar ' + esc(result.name) + '</a></div>' : '') +
-      printPreviewHtml_() + '</section><aside class="panel print-panel"><h2 class="section-title">Cómo funciona</h2><p class="hint">Cada colección aparece en su propio bloque: objetivo, pronunciación y traducción. Si no hay ayudas, la tabla tendrá dos columnas. Las celdas faltantes quedan vacías.</p><p class="hint">Al descargarlo, las frases incluidas quedan marcadas con la fecha de generación. Podés corregir esa marca desde Gestionar.</p></aside></div>';
+      printPreviewHtml_() + '</section><aside class="panel print-panel"><h2 class="section-title">Cómo funciona</h2><p class="hint">Cada colección aparece en su propio bloque: objetivo, pronunciación y traducción. Si no hay ayudas, la tabla tendrá dos columnas. Las celdas faltantes quedan vacías.</p><p class="hint">Al descargarlo, las frases incluidas quedan marcadas con la fecha de generación. Podés corregir esa marca desde Todas las Frases.</p></aside></div>';
   }
 
   function selectAllPrintCollections_() {
@@ -1226,124 +883,79 @@
   }
 
   function collectionCatalogHtml() {
-    if (!state.collectionsLoaded) return '<div class="empty">Cargando colecciones…</div>';
-    var query = String(state.collectionQuery || '').toLowerCase();
-    var collections = [{ id:ALL_COLLECTION_ID, name:'Todas', count:state.items.length, all:true }].concat(state.collections).filter(function (collection) {
-      return !query || collection.name.toLowerCase().indexOf(query) !== -1;
-    });
-    var rows = collections.map(function (collection) {
-      return '<button class="collection-choice" data-act="open-collection" data-id="' + esc(collection.id) + '"><span>' + esc(collection.name) + '</span><span class="collection-count">' + collection.count + ' frases</span></button>';
+    var query = state.collectionQuery.toLowerCase();
+    var rows = state.collections.filter(function (collection) {
+      return !collection.unassigned && (!query || collection.name.toLowerCase().indexOf(query) !== -1);
+    }).map(function (collection) {
+      return '<article class="collection-choice"><strong class="collection-title">' + esc(collection.name) + '</strong><span class="collection-count">' + collection.count + ' frases</span><button class="link" data-act="edit-collection" data-id="' + esc(collection.id) + '">Renombrar</button><button class="link danger" data-act="delete-collection" data-id="' + esc(collection.id) + '">Borrar</button></article>';
     }).join('');
-    return '<section><div class="section-head"><h1 class="section-title">Colecciones</h1><button class="primary" data-act="new-collection">Nueva colección</button></div>' +
-      '<input id="collection-search" type="search" placeholder="Buscar colecciones…" value="' + esc(state.collectionQuery) + '"><div class="card collection-list" style="margin-top:12px">' +
-      (rows || '<div class="empty">No hay colecciones que coincidan.</div>') + '</div></section>';
+    return '<section><div class="section-head"><h1 class="section-title">Colecciones</h1><button class="primary" data-act="new-collection">Nueva colección</button></div><p class="hint">Asigná las frases desde Todas las Frases.</p>' +
+      '<input id="collection-search" type="search" aria-label="Buscar colecciones" placeholder="Buscar colecciones…" value="' + esc(state.collectionQuery) + '"><div class="card collection-list" style="margin-top:12px">' + (rows || '<div class="empty">No hay colecciones que coincidan.</div>') + '</div></section>';
   }
 
-  function playerOptionsHtml(values, current, suffix) {
+  function ssmlOptionsHtml_(values, current, suffix) {
     return values.map(function (value) {
-      var label = suffix === ' s' ? value / 1000 + suffix : suffix ? value + suffix : value;
-      return '<option value="' + value + '"' + (Number(value) === Number(current) ? ' selected' : '') + '>' + label + '</option>';
+      var label = suffix ? value / 1000 + suffix : value;
+      return '<option value="' + value + '"' + (value === current ? ' selected' : '') + '>' + label + '</option>';
     }).join('');
-  }
-
-  function sessionQuickControlHtml_() {
-    if (!currentAudioAvailable_()) return '<span class="muted">Revelá la frase para escuchar.</span>';
-    var hasVoice = !!player.voice;
-    return '<button class="primary" id="player-toggle" data-act="player-toggle"' + (hasVoice ? '' : ' disabled') + '>' + (player.playing ? 'Pausar' : 'Reproducir') + '</button>' +
-      (hasVoice ? '' : '<span class="hint">Sin voz para ' + esc(targetName_()) + '</span>');
   }
 
   function sessionRowHtml_(item, index) {
-    var current = index === player.index;
-    var german = germanVisible_(index);
-    var spanish = state.session.supports.spanish;
+    var revealed = !!state.session.revealedIds[item.id];
+    var supports = state.session.supports;
     var text = '';
-    if (german) text += '<span class="session-row-de" lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</span>' + pronunciationHtml_(item);
-    if (spanish) text += '<span class="session-row-es" lang="' + esc(state.language.translation.locale) + '">' + esc(item.es || 'Sin traducción') + '</span>';
+    if (supports.german || revealed) text += '<span class="session-row-de" lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</span>' + pronunciationHtml_(item, supports.pronunciation || revealed);
+    if (supports.spanish || revealed) text += '<span class="session-row-es" lang="' + esc(state.language.translation.locale) + '">' + esc(item.es || 'Sin traducción') + '</span>';
     if (!text) text = '<span class="session-row-meta">Frase ' + (index + 1) + '</span>';
-    var action = '';
-    if (current && recallPhase_() && !german) {
-      action = '<button class="session-row-play" data-act="toggle-support" data-support="german">Revelar ' + esc(targetName_()) + '</button>';
-    } else if (current) {
-      action = '<button class="session-row-play" data-act="player-row-toggle" data-index="' + index + '"' + (player.voice ? '' : ' disabled') + '>' + (player.playing ? 'Pausar' : 'Reproducir') + '</button>';
-    }
-    return '<div class="session-choice' + (current ? ' on' : '') + (current && player.playing ? ' playing' : '') + '" data-index="' + index + '"' + (current ? ' aria-current="true"' : '') + '><button class="session-row-select" data-act="select-session-item" data-index="' + index + '" aria-label="Elegir frase ' + (index + 1) + '">' + text + '</button>' + action + '</div>';
+    return '<button class="session-choice' + (revealed ? ' revealed' : '') + '" data-act="reveal-practice" data-id="' + esc(item.id) + '" aria-expanded="' + revealed + '" aria-describedby="practice-hint">' + text + '</button>';
   }
 
   function sessionPage_() {
-    var page = paginate(sessionItems_(), state.collectionPage);
-    state.collectionPage = page.page;
+    var page = paginate(sessionItems_(), state.session.page);
+    state.session.page = page.page;
     return page;
   }
 
   function sessionListHtml_() {
     var page = sessionPage_();
-    return page.items.map(function (item, index) {
+    return (page.items.map(function (item, index) {
       return sessionRowHtml_(item, (page.page - 1) * PAGE_SIZE + index);
+    }).join('') || '<div class="empty">No hay frases que coincidan con los filtros.</div>') + paginationHtml('practice', page);
+  }
+
+  function practiceSupportsHtml_() {
+    return [['german', targetName_()], ['spanish', translationName_()], ['pronunciation', 'pronunciación']].map(function (entry) {
+      var visible = state.session.supports[entry[0]];
+      return '<button class="ghost" data-act="toggle-support" data-support="' + entry[0] + '" aria-pressed="' + visible + '">' + (visible ? 'Ocultar ' : 'Mostrar ') + esc(entry[1]) + '</button>';
     }).join('');
   }
 
-  function sessionControlsHtml_() {
-    var phaseOptions = [['free', 'Libre'], ['understand', '1 Comprensión'], ['listen', '2 Escucha'], ['shadow', '3 Repetición'], ['recall', '4 Recuperación']].map(function (entry) {
-      return '<option value="' + entry[0] + '"' + (state.session.phase === entry[0] ? ' selected' : '') + '>' + entry[1] + '</option>';
-    }).join('');
-    return '<section class="card session-controls' + (state.session.controlsOpen ? '' : ' collapsed') + '"><div class="session-control-head"><div><strong>Sesión</strong><p class="player-progress" id="player-progress"></p></div><div class="session-quick-control" id="session-quick-control">' + sessionQuickControlHtml_() + '</div><button class="ghost" data-act="toggle-session-controls">' + (state.session.controlsOpen ? 'Ocultar' : 'Mostrar') + '</button></div>' +
-      '<div class="session-control-body"><div class="field"><label for="session-phase">Fase</label><select id="session-phase">' + phaseOptions + '</select></div><div class="field"><label for="session-order">Orden</label><select id="session-order"><option value="manual"' + (state.session.order === 'manual' ? ' selected' : '') + '>Manual</option><option value="random"' + (state.session.order === 'random' ? ' selected' : '') + '>Aleatorio</option></select></div>' +
-      '<div class="player-settings"><div><label for="player-rate">Velocidad</label><select id="player-rate">' + playerOptionsHtml([0.75, 1, 1.25], state.playerSettings.rate, '×') + '</select></div><div><label for="player-pause">Pausa</label><select id="player-pause">' + playerOptionsHtml([1000, 2000, 3000, 5000], state.playerSettings.pause, ' s') + '</select></div><div><label for="player-reps">Repeticiones</label><select id="player-reps">' + playerOptionsHtml([1, 2, 3, 4, 5], state.playerSettings.reps, '') + '</select></div></div>' +
-      '<div class="study-actions"><button class="ghost" data-act="player-previous">← Anterior</button><button class="ghost" data-act="player-restart">Reiniciar frase</button><button class="ghost" data-act="player-next">Siguiente →</button><button class="ghost" data-act="player-restart-list">Volver al inicio</button><button class="ghost" data-act="copy-session-ssml">Copiar SSML</button></div></div></section>';
+  function renderPracticeList() {
+    var list = document.getElementById('session-list');
+    if (list) list.innerHTML = sessionListHtml_();
+    var count = document.getElementById('practice-count');
+    if (count) count.textContent = sessionItems_().length + ' frases';
+    var copy = document.querySelector('[data-act="copy-session-ssml"]');
+    if (copy) copy.disabled = !sessionItems_().length;
+    var supports = document.getElementById('practice-supports');
+    if (supports) supports.innerHTML = practiceSupportsHtml_();
   }
 
-  function collectionPlayerHtml() {
-    var collection = state.collection;
-    if (!collection) return '<div class="empty">Cargando colección…</div>';
-    if (!collection.items.length) {
-      return '<section class="card collection-player"><button class="link" data-act="collection-back">← Volver a colecciones</button><h1 class="section-title" style="margin-top:14px">' + esc(collection.collection.name) + '</h1><div class="empty">Esta colección no tiene frases.</div>' +
-        (collection.collection.unassigned || collection.collection.all ? '' : '<div class="study-actions"><button class="primary" data-act="new-collection-phrase">Nueva frase</button><button class="ghost" data-act="edit-collection">Agregar existentes</button></div>') + '</section>';
-    }
-    playerVoiceReady_();
-    return '<section class="collection-player"><div class="section-head"><button class="link" data-act="collection-back">← Colecciones</button>' +
-      (collection.collection.unassigned || collection.collection.all ? '' : '<span><button class="link" data-act="new-collection-phrase">Nueva frase</button><button class="link" data-act="edit-collection">Editar colección</button></span>') + '</div><h1 class="section-title">' + esc(collection.collection.name) + '</h1>' +
-      '<div class="session-layout">' + sessionControlsHtml_() + '<section class="card session-list"><div class="session-list-head"><div><h2 class="section-title">Frases</h2><span class="muted">' + sessionItems_().length + ' frases' + (recallPhase_() ? ' · Decí la respuesta antes de revelar.' : '') + '</span></div><div class="session-language-actions"><button class="ghost" id="support-german" data-act="toggle-support" data-support="german"></button><button class="ghost" id="support-spanish" data-act="toggle-support" data-support="spanish"></button>' + pronunciationToggleHtml_() + '</div></div><div id="session-list">' + sessionListHtml_() + '</div>' + paginationHtml('collection', sessionPage_()) + '</section></div></section>';
-  }
-
-  function collectionCandidates_() {
-    var current = {};
-    (state.collection && state.collection.items || []).forEach(function (item) { current[item.id] = true; });
-    return matchingItems(state.items, state.collectionPhraseQuery).filter(function (item) { return !current[item.id]; });
-  }
-
-  function selectedCollectionCandidateIds_() {
-    return Object.keys(state.collectionSelection).filter(function (id) { return state.collectionSelection[id]; });
+  function renderPractice() {
+    el.screen.innerHTML = '<section><div class="section-head"><h1 class="section-title">Estudiar Frases</h1><button class="primary" data-act="copy-session-ssml"' + (sessionItems_().length ? '' : ' disabled') + '>Copiar SSML</button></div>' +
+      collectionFilterHtml_('practice', state.session.collectionIds) + '<div class="practice-options"><input id="practice-search" type="search" aria-label="Buscar frases para estudiar" placeholder="Buscar frases…" value="' + esc(state.session.query) + '"><div><label for="session-order">Orden</label><select id="session-order"><option value="random"' + (state.session.order === 'random' ? ' selected' : '') + '>Aleatorio</option><option value="manual"' + (state.session.order === 'manual' ? ' selected' : '') + '>Más recientes primero</option></select></div></div>' +
+      '<details class="panel import-panel" id="ssml-options"' + (state.session.ssmlOpen ? ' open' : '') + '><summary>Ajustes de SSML</summary><p class="hint">Se copian todas las frases filtradas, en el orden del listado, incluyendo las otras páginas.</p><div class="ssml-settings"><div><label for="ssml-pause">Pausa</label><select id="ssml-pause">' + ssmlOptionsHtml_([1000, 2000, 3000, 5000], state.ssmlSettings.pause, ' s') + '</select></div><div><label for="ssml-reps">Repeticiones</label><select id="ssml-reps">' + ssmlOptionsHtml_([1, 2, 3, 4, 5], state.ssmlSettings.reps, '') + '</select></div></div></details>' +
+      '<p class="hint" id="practice-hint">Tocá una frase para mostrar sus campos ocultos; volvé a tocarla para ocultarlos.</p><section class="card session-list"><div class="session-list-head"><span class="muted" id="practice-count">' + sessionItems_().length + ' frases</span><div class="session-language-actions" id="practice-supports">' + practiceSupportsHtml_() + '</div></div><div id="session-list">' + sessionListHtml_() + '</div></section></section>';
   }
 
   function collectionEditorHtml() {
-    if (state.collectionEditor === 'new') {
-      return '<section class="panel form-panel" style="max-width:620px"><div class="section-head"><h1 class="section-title">Nueva colección</h1></div><div class="field"><label for="collection-name">Nombre</label><input id="collection-name" type="text" placeholder="Por ejemplo: Mi trabajo"></div><div class="form-actions"><button class="primary" data-act="save-collection">Crear colección</button><button class="ghost" data-act="cancel-collection-editor">Cancelar</button></div></section>';
-    }
-    var collection = state.collection;
-    if (!collection) return '<div class="empty">Cargando colección…</div>';
-    if (state.collectionPhraseDraft) return phraseEditorHtml_(null, collection.collection.id);
-    var memberPage = paginate(collection.items, state.collectionEditorPage);
-    state.collectionEditorPage = memberPage.page;
-    var members = memberPage.items.map(function (item, index) {
-      index += (memberPage.page - 1) * PAGE_SIZE;
-      return '<div class="collection-row"><div><strong lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</strong>' + pronunciationHtml_(item) + '<p lang="' + esc(state.language.translation.locale) + '">' + esc(item.es) + '</p></div><div class="collection-row-actions"><button class="link" data-act="move-collection-phrase" data-id="' + esc(item.id) + '" data-direction="-1"' + (index === 0 ? ' disabled' : '') + '>↑</button><button class="link" data-act="move-collection-phrase" data-id="' + esc(item.id) + '" data-direction="1"' + (index === collection.items.length - 1 ? ' disabled' : '') + '>↓</button><button class="link danger" data-act="remove-collection-phrase" data-id="' + esc(item.id) + '">Quitar</button></div></div>';
-    }).join('') || '<div class="empty">Todavía no agregaste frases.</div>';
-    var candidatePage = paginate(collectionCandidates_(), state.collectionCandidatePage);
-    state.collectionCandidatePage = candidatePage.page;
-    var selectedCount = selectedCollectionCandidateIds_().length;
-    var candidates = candidatePage.items.map(function (item) {
-      var selected = !!state.collectionSelection[item.id];
-      return '<label class="collection-row"><input type="checkbox" data-collection-candidate value="' + esc(item.id) + '"' + (selected ? ' checked' : '') + '><div><strong lang="' + esc(state.language.locale) + '">' + esc(item.de) + '</strong>' + pronunciationHtml_(item) + '<p lang="' + esc(state.language.translation.locale) + '">' + esc(item.es) + '</p></div></label>';
-    }).join('') || '<div class="empty">No hay frases para agregar.</div>';
-    return '<section><div class="section-head"><h1 class="section-title">Editar colección</h1><button class="link danger" data-act="delete-collection">Borrar colección</button></div><div class="field" style="max-width:620px"><label for="collection-name">Nombre</label><input id="collection-name" type="text" value="' + esc(collection.collection.name) + '"></div><div class="form-actions" style="justify-content:flex-start; margin-bottom:20px"><button class="primary" data-act="save-collection">Guardar nombre</button><button class="ghost" data-act="cancel-collection-editor">Volver al reproductor</button></div><div class="collection-editor"><section class="card collection-members"><div class="section-head" style="padding:14px 14px 0"><h2 class="section-title">Frases de la colección</h2><span class="muted">' + collection.items.length + '</span></div>' + members + paginationHtml('collection-editor', memberPage) + '</section><section><div class="section-head"><h2 class="section-title">Agregar frases</h2><button class="ghost" data-act="new-collection-phrase">Nueva frase</button></div><input id="collection-phrase-search" type="search" placeholder="Buscar frases…" value="' + esc(state.collectionPhraseQuery) + '"><div class="card collection-candidates" style="margin-top:12px">' + candidates + paginationHtml('collection-candidates', candidatePage) + '</div><div class="form-actions" style="justify-content:flex-start; margin-top:12px"><button class="primary" data-act="add-selected-collection-phrases"' + (selectedCount ? '' : ' disabled') + '>Agregar seleccionadas (' + selectedCount + ')</button></div></section></div></section>';
+    var collection = collectionById_(state.collectionId);
+    var isNew = state.collectionEditor === 'new';
+    return '<section class="panel form-panel" style="max-width:620px"><h1 class="section-title">' + (isNew ? 'Nueva colección' : 'Renombrar colección') + '</h1><div class="field"><label for="collection-name">Nombre</label><input id="collection-name" type="text" value="' + esc(collection ? collection.name : '') + '" placeholder="Por ejemplo: Mi trabajo"></div><div class="form-actions"><button class="primary" data-act="save-collection">' + (isNew ? 'Crear colección' : 'Guardar nombre') + '</button><button class="ghost" data-act="cancel-collection-editor">Cancelar</button></div></section>';
   }
 
   function renderCollections() {
-    if (state.collectionEditor) el.screen.innerHTML = collectionEditorHtml();
-    else if (state.collectionId) el.screen.innerHTML = collectionPlayerHtml();
-    else el.screen.innerHTML = collectionCatalogHtml();
-    if (state.collectionId && !state.collectionEditor) updatePlayerUi_();
+    el.screen.innerHTML = state.collectionEditor ? collectionEditorHtml() : collectionCatalogHtml();
   }
 
   function renderGenerator() {
@@ -1369,7 +981,7 @@
         pronunciationFieldsHtml_(item, index, locked) +
         '<div class="field"><label for="generated-es-' + index + '">' + esc(translationName_()) + '</label><textarea id="generated-es-' + index + '" lang="' + esc(state.language.translation.locale) + '" data-generator-field="es" data-index="' + index + '"' + locked + '>' + esc(item.es) + '</textarea></div></article>';
     }).join('');
-    el.screen.innerHTML = '<section style="max-width:800px;margin:auto"><h1 class="section-title">Generar frases</h1>' +
+    el.screen.innerHTML = '<section style="max-width:800px;margin:auto"><h1 class="section-title">Generar frases con IA</h1>' +
       '<p class="hint">10 frases en ' + esc(targetName_()) + ' con traducción natural a ' + esc(translationName_()) + '. Revisalas antes de agregarlas.</p>' +
       '<div class="field"><label for="generator-context">Situación o temática</label><textarea id="generator-context" placeholder="Por ejemplo: pedir ayuda con un bug"' + disabled + '>' + esc(draft.context) + '</textarea></div>' +
       '<div class="field"><label for="generator-level">Nivel de la próxima tanda</label><select id="generator-level"' + disabled + '><option value="intermediate"' + (draft.level === 'intermediate' ? ' selected' : '') + '>Intermedio (B1–B2)</option><option value="advanced"' + (draft.level === 'advanced' ? ' selected' : '') + '>Avanzado (C1–C2)</option></select></div>' +
@@ -1447,7 +1059,6 @@
       draft.busy = false;
       draft.saving = false;
       decorateCollections_();
-      if (state.collectionId) state.collection = localCollection_(state.collectionId);
       // Conservá formularios y material editado; el backend valida la firma del material al descargar.
       if (state.view === 'generate') renderGenerator();
       say(draft.collectionIds.length ? 'Frases agregadas a las colecciones elegidas.' : 'Frases agregadas sin asignar colecciones nuevas.');
@@ -1461,7 +1072,7 @@
 
   function renderEtymology() {
     var result = state.etymologyResult;
-    el.screen.innerHTML = '<section class="panel form-panel" style="max-width:720px"><div class="section-head"><h1 class="section-title">Etimología</h1></div>' +
+    el.screen.innerHTML = '<section class="panel form-panel" style="max-width:720px"><div class="section-head"><h1 class="section-title">Explorar la etimología</h1></div>' +
       '<p class="hint">Analizá una palabra o frase sin guardarla en tu registro.</p>' +
       '<div class="field"><label for="etymology-source">Palabra o frase</label><textarea id="etymology-source" placeholder="Escribí una palabra o frase">' + esc(state.etymologyText) + '</textarea></div>' +
       '<div class="ai-actions"><button id="ai-etymology" class="ghost" data-act="etymology">Analizar etimología</button></div>' +
@@ -1513,7 +1124,6 @@
       state.setup = null;
       if (changed) { state.etymologyResult = ''; state.generator.items = []; state.generator.generatedLevel = null; state.generator.generatedLanguageVersion = null; state.importPreview = null; }
       languageDraft_(savedLanguage);
-      stopPlayer_();
       reload(function () { render(); say('Idiomas guardados.'); });
     }).withFailureHandler(function (err) {
       state.configSaving = false;
@@ -1523,136 +1133,60 @@
   }
 
   function render() {
-    document.querySelector('.brand').textContent = 'Sprache Lernen App';
     document.querySelector('nav').style.display = state.setup ? 'none' : '';
     document.querySelector('[data-act="refresh-data"]').style.display = state.setup ? 'none' : '';
-    if (state.setup) return renderSettings();
-    Array.prototype.forEach.call(document.querySelectorAll('.nav'), function (button) {
-      button.className = 'nav' + (button.dataset.view === state.view ? ' on' : '');
+    var tools = ['print', 'generate', 'etymology'].indexOf(state.view) !== -1;
+    var toolNav = document.getElementById('tool-nav');
+    toolNav.hidden = !!state.setup || !tools;
+    Array.prototype.forEach.call(toolNav.querySelectorAll('button'), function (button) {
+      button.className = button.dataset.view === state.view ? 'primary' : 'ghost';
+      button.setAttribute('aria-current', button.dataset.view === state.view ? 'page' : 'false');
     });
-    if (state.view === 'study') renderStudy(); else if (state.view === 'collections') renderCollections(); else if (state.view === 'manage') renderManage(); else if (state.view === 'print') renderPrint(); else if (state.view === 'generate') renderGenerator(); else if (state.view === 'settings') renderSettings(); else renderEtymology();
-  }
-
-  function openCollection(id) {
-    stopPlayer_();
-    var collection = localCollection_(id);
-    if (!collection) return say('No existe la colección seleccionada.', 'err');
-    state.collectionId = id;
-    state.collection = collection;
-    state.collectionEditor = null;
-    state.collectionPhraseDraft = false;
-    state.collectionSelection = {};
-    player.index = 0;
-    player.repetition = 0;
-    state.session.controlsOpen = true;
-    resetSession_('free', 'manual', true);
-    render();
+    Array.prototype.forEach.call(document.querySelectorAll('.nav'), function (button) {
+      var current = button.dataset.view === (tools ? 'tools' : state.view);
+      button.className = 'nav' + (current ? ' on' : '');
+      button.setAttribute('aria-current', current ? 'page' : 'false');
+    });
+    if (state.setup) return renderSettings();
+    if (state.view === 'practice') renderPractice(); else if (state.view === 'collections') renderCollections(); else if (state.view === 'manage') renderManage(); else if (state.view === 'print') renderPrint(); else if (state.view === 'generate') renderGenerator(); else if (state.view === 'settings') renderSettings(); else renderEtymology();
   }
 
   function saveCollection() {
-    var input = document.getElementById('collection-name');
-    var name = input && input.value;
-    if (!String(name || '').trim()) return say('Escribí un nombre para la colección.', 'err');
-    if (state.collectionEditor === 'new') {
-      google.script.run.withSuccessHandler(function (collection) {
-        clearPrintResult_();
-        state.collections.push(collection);
-        state.memberIdsByCollection[collectionKey_(collection.id)] = [];
-        decorateCollections_();
-        state.collectionEditor = null;
-        openCollection(collection.id);
-      }).withFailureHandler(function (err) { say(err.message, 'err'); }).createCollection({ name:name });
-      return;
-    }
+    var name = document.getElementById('collection-name').value;
+    if (!name.trim()) return say('Escribí un nombre para la colección.', 'err');
+    var isNew = state.collectionEditor === 'new';
     google.script.run.withSuccessHandler(function (collection) {
       clearPrintResult_();
-      var current = collectionById_(collection.id);
-      if (current) current.name = collection.name;
+      if (isNew) {
+        state.collections.push(collection);
+        state.memberIdsByCollection[collectionKey_(collection.id)] = [];
+      } else collectionById_(collection.id).name = collection.name;
+      state.collectionEditor = null;
+      state.collectionId = null;
       decorateCollections_();
-      refreshOpenCollection_();
       render();
-    }).withFailureHandler(function (err) { say(err.message, 'err'); }).renameCollection({ id:state.collectionId, name:name });
+      say(isNew ? 'Colección creada.' : 'Nombre guardado.');
+    }).withFailureHandler(function (err) { say(err.message, 'err'); })[isNew ? 'createCollection' : 'renameCollection']({ id:state.collectionId, name:name });
   }
 
-  function deleteCurrentCollection() {
-    var collection = state.collection && state.collection.collection;
+  function deleteCurrentCollection(id) {
+    var collection = collectionById_(id);
     if (!collection || collection.unassigned || !confirm('Borrar la colección "' + collection.name + '"? Las frases se conservan.')) return;
-    stopPlayer_();
     google.script.run.withSuccessHandler(function () {
       clearPrintResult_();
       delete state.memberIdsByCollection[collectionKey_(collection.id)];
       state.collections = state.collections.filter(function (item) { return item.id !== collection.id; });
       state.printCollectionIds = state.printCollectionIds.filter(function (id) { return collectionKey_(id) !== collectionKey_(collection.id); });
-      state.collectionId = null;
-      state.collection = null;
-      state.collectionEditor = null;
       decorateCollections_();
       render();
       say('Colección borrada.');
     }).withFailureHandler(function (err) { say(err.message, 'err'); }).deleteCollection(collection.id);
   }
 
-  function changeCollectionPhrase(action, id, direction) {
-    var collectionId = state.collectionId;
-    if (!collectionId) return;
-    var runner = google.script.run.withSuccessHandler(function (result) {
-      clearPrintResult_();
-      state.memberIdsByCollection[collectionKey_(result.collectionId)] = result.phraseIds;
-      decorateCollections_();
-      refreshOpenCollection_();
-      render();
-    }).withFailureHandler(function (err) { say(err.message, 'err'); });
-    if (action === 'remove') runner.removeCollectionPhrase({ collectionId:collectionId, phraseId:id });
-    else runner.moveCollectionPhrase({ collectionId:collectionId, phraseId:id, direction:direction });
-  }
-
-  function addSelectedCollectionPhrases() {
-    var phraseIds = selectedCollectionCandidateIds_();
-    if (!state.collectionId || !phraseIds.length) return;
-    google.script.run.withSuccessHandler(function (result) {
-      clearPrintResult_();
-      state.memberIdsByCollection[collectionKey_(result.collectionId)] = result.phraseIds;
-      state.collectionSelection = {};
-      decorateCollections_();
-      refreshOpenCollection_();
-      render();
-      say(result.addedIds.length + ' frases agregadas' + (result.skippedIds.length ? '; ' + result.skippedIds.length + ' ya estaban en la colección.' : '.'));
-    }).withFailureHandler(function (err) { say(err.message, 'err'); }).addCollectionPhrases({
-      collectionId:state.collectionId,
-      phraseIds:phraseIds
-    });
-  }
-
-  function openStudy(id) {
-    if (!byId(id)) return;
-    state.studyTab = 'phrases';
-    state.detailId = id;
-    state.revealed = false;
-    render();
-  }
-
-  function recordResult(correct) {
-    if (!state.detailId || state.saving) return;
-    state.saving = true;
-    render();
-    google.script.run.withSuccessHandler(function (data) {
-      state.history = data.history;
-      state.saving = false;
-      state.detailId = null;
-      state.revealed = false;
-      render();
-      say(correct ? 'Marcada como bien.' : 'Marcada como mal.');
-    }).withFailureHandler(function (err) {
-      state.saving = false;
-      render();
-      say(err.message, 'err');
-    }).recordStudy(state.detailId, correct);
-  }
-
   function savePhrase() {
     if (state.languageBusy) return say('Esperá a que termine la operación pendiente.', 'err');
     var id = state.editing || '';
-    var collectionIds = state.collectionPhraseDraft ? [state.collectionId] : Array.prototype.map.call(
+    var collectionIds = Array.prototype.map.call(
       document.querySelectorAll('input[name="phrase-collection"]:checked'), function (input) { return input.value; }
     );
     var payload = { id:id, de:document.getElementById('f-de').value, es:document.getElementById('f-es').value,
@@ -1661,7 +1195,6 @@
       notes:document.getElementById('f-notes').value, tags:document.getElementById('f-tags').value,
       expectedUpdated:id && byId(id) ? byId(id).updated : '', expectedCollectionIds:id ? (state.editingCollectionIds || []) : [], collectionIds:collectionIds };
     if (!payload.de.trim()) return say('Escribí la frase en ' + targetName_() + ' antes de guardar.', 'err');
-    var fromCollection = state.collectionPhraseDraft;
     state.languageBusy++;
     google.script.run.withSuccessHandler(function (result) {
       state.languageBusy--;
@@ -1670,11 +1203,7 @@
       if (id) state.items[state.items.indexOf(byId(id))] = item; else state.items.unshift(item);
       setPhraseCollectionIds_(item.id, result.collectionIds);
       decorateCollections_();
-      if (state.collectionId) refreshOpenCollection_();
-      if (fromCollection) {
-        state.collectionPhraseDraft = false;
-        state.collectionSelection = {};
-      } else { state.editing = null; state.editingCollectionIds = null; }
+      state.editing = null; state.editingCollectionIds = null;
       render();
       say(id ? 'Cambios guardados.' : 'Frase agregada.');
     }).withFailureHandler(function (err) { state.languageBusy--; say(err.message, 'err'); }).savePhrase(payload);
@@ -1816,15 +1345,13 @@
   function removePhrase(id) {
     var item = byId(id);
     if (!item || !confirm('Borrar ' + id + '? Se elimina la fila de la hoja.')) return;
-    google.script.run.withSuccessHandler(function (data) {
+    google.script.run.withSuccessHandler(function () {
       clearPrintResult_();
       state.items = state.items.filter(function (item) { return item.id !== id; });
-      state.history = data.history;
       Object.keys(state.memberIdsByCollection).forEach(function (key) {
         state.memberIdsByCollection[key] = state.memberIdsByCollection[key].filter(function (phraseId) { return phraseId !== id; });
       });
       decorateCollections_();
-      if (state.collectionId) refreshOpenCollection_();
       if (state.editing === id) { state.editing = null; state.editingCollectionIds = null; }
       render();
       say('Frase ' + id + ' borrada.');
@@ -1842,14 +1369,12 @@
     state.importText = settings.text;
     state.importHasHeader = settings.hasHeader;
     state.importDelimiter = settings.delimiter;
+    state.importOpen = true;
     google.script.run.withSuccessHandler(function (data) {
       if (!data.columnCount) return say('No se encontraron columnas para importar.', 'err');
       state.importPreview = { data:data, text:settings.text, delimiter:settings.delimiter };
+      state.importColumns = {de:0, es:data.columnCount > 1 ? 1 : 0, pronunciation:-1, kana:-1};
       render();
-      var de = document.getElementById('import-de');
-      var es = document.getElementById('import-es');
-      if (de) de.value = '0';
-      if (es) es.value = data.columnCount > 1 ? '1' : '0';
     }).withFailureHandler(function (err) { say(err.message, 'err'); }).previewImport(settings.text, settings.delimiter);
   }
 
@@ -1867,6 +1392,7 @@
       state.languageBusy--;
       state.importText = '';
       state.importPreview = null;
+      state.importOpen = false;
       state.importHasHeader = true;
       state.importDelimiter = ',';
       clearPrintResult_();
@@ -1922,10 +1448,8 @@
     }
     if (act === 'refresh-data') {
       if (state.view === 'print') capturePrintPreview_();
-      stopPlayer_();
       say('Actualizando datos…');
       return reload(function () {
-        if (state.collectionId) refreshOpenCollection_();
         render();
         say('Datos actualizados.');
       });
@@ -1938,78 +1462,49 @@
     if (act === 'save-print-pronunciation') return savePrintPronunciation_();
     if (act === 'switch-view') {
       if (state.view === 'print') capturePrintPreview_();
-      stopPlayer_();
-      state.view = button.dataset.view;
-      state.detailId = null;
+      state.view = button.dataset.view === 'tools' ? state.toolView : button.dataset.view;
+      if (['print', 'generate', 'etymology'].indexOf(state.view) !== -1) state.toolView = state.view;
       state.editing = null;
       state.editingCollectionIds = null;
-      state.collectionPhraseDraft = false;
       return render();
     }
-    if (act === 'open-collection') return openCollection(button.dataset.id);
-    if (act === 'collection-back') {
-      stopPlayer_();
-      state.collectionId = null;
-      state.collection = null;
-      state.collectionEditor = null;
-      state.collectionPhraseDraft = false;
-      state.collectionSelection = {};
-      return render();
-    }
-    if (act === 'new-collection') { stopPlayer_(); state.collectionId = null; state.collection = null; state.collectionEditor = 'new'; state.collectionEditorPage = 1; state.collectionCandidatePage = 1; state.collectionSelection = {}; return render(); }
-    if (act === 'edit-collection') { stopPlayer_(); state.collectionEditor = state.collectionId; state.collectionPhraseQuery = ''; state.collectionEditorPage = 1; state.collectionCandidatePage = 1; state.collectionSelection = {}; return render(); }
-    if (act === 'cancel-collection-editor') {
-      state.collectionPhraseQuery = '';
-      state.collectionSelection = {};
-      state.collectionPhraseDraft = false;
-      if (state.collectionEditor === 'new') { state.collectionEditor = null; return render(); }
-      state.collectionEditor = null;
-      return render();
-    }
-    if (act === 'new-collection-phrase') { stopPlayer_(); state.collectionEditor = state.collectionId; state.collectionPhraseDraft = true; return renderCollections(); }
-    if (act === 'cancel-collection-phrase') { state.collectionPhraseDraft = false; return renderCollections(); }
+    if (act === 'new-collection') { state.collectionId = null; state.collectionEditor = 'new'; return render(); }
+    if (act === 'edit-collection') { state.collectionId = button.dataset.id; state.collectionEditor = state.collectionId; return render(); }
+    if (act === 'cancel-collection-editor') { state.collectionEditor = null; state.collectionId = null; return render(); }
     if (act === 'save-collection') return saveCollection();
-    if (act === 'delete-collection') return deleteCurrentCollection();
-    if (act === 'add-selected-collection-phrases') return addSelectedCollectionPhrases();
-    if (act === 'remove-collection-phrase') return changeCollectionPhrase('remove', button.dataset.id);
-    if (act === 'move-collection-phrase') return changeCollectionPhrase('move', button.dataset.id, Number(button.dataset.direction));
-    if (act === 'set-phase') return setPhase_(button.dataset.phase);
-    if (act === 'select-session-item') return selectSessionItem_(Number(button.dataset.index));
-    if (act === 'player-row-toggle') return toggleSessionItem_(Number(button.dataset.index));
-    if (act === 'toggle-session-controls') { state.session.controlsOpen = !state.session.controlsOpen; return renderCollections(); }
-    if (act === 'toggle-support') return toggleSupport_(button.dataset.support);
-    if (act === 'player-toggle') return togglePlayer_();
-    if (act === 'player-previous') return movePlayer_(-1);
-    if (act === 'player-next') return movePlayer_(1);
-    if (act === 'player-restart') return restartPlayer_();
-    if (act === 'player-restart-list') return restartSession_();
-    if (act === 'copy-session-ssml') return copySessionSsml_();
-    if (act === 'study-tab') { state.studyTab = button.dataset.tab; return render(); }
-    if (act === 'study') return openStudy(button.dataset.id);
-    if (act === 'back-study') { state.detailId = null; state.revealed = false; return render(); }
-    if (act === 'reveal') { state.revealed = true; return render(); }
-    if (act === 'result') return recordResult(button.dataset.correct === 'true');
-    if (act === 'random') {
-      var item = randomCandidate(state.items, state.history);
-      if (item) return openStudy(item.id);
-      state.studyTab = 'history';
-      render();
-      say('Todas las frases están entre las últimas 20. Repasá una desde el historial.', 'err');
+    if (act === 'delete-collection') return deleteCurrentCollection(button.dataset.id);
+    if (act === 'toggle-support') {
+      var support = button.dataset.support;
+      toggleSupport_(support);
+      document.querySelector('[data-support="' + support + '"]').focus({preventScroll:true});
       return;
     }
+    if (act === 'reveal-practice') {
+      var phraseId = button.dataset.id;
+      state.session.revealedIds[phraseId] = !state.session.revealedIds[phraseId];
+      renderPracticeList();
+      document.querySelector('#session-list [data-id="' + phraseId + '"]').focus({preventScroll:true});
+      return;
+    }
+    if (act === 'copy-session-ssml') return copySessionSsml_();
+    if (act === 'clear-phrase-filter') {
+      if (button.dataset.list === 'manage') { state.manageCollectionIds = []; state.managePage = 1; }
+      else { state.session.collectionIds = []; refreshPractice_(); }
+      Array.prototype.forEach.call(document.querySelectorAll('[data-phrase-filter="' + button.dataset.list + '"]'), function (input) { input.checked = false; });
+      document.getElementById(button.dataset.list + '-collection-summary').textContent = collectionFilterLabel_([]);
+      return button.dataset.list === 'manage' ? renderManageList() : renderPracticeList();
+    }
     if (act === 'new') { state.editing = ''; state.editingCollectionIds = []; return render(); }
-    if (act === 'edit') { state.view = 'manage'; state.detailId = null; state.editing = button.dataset.id; state.editingCollectionIds = collectionIdsForPhrase_(state.editing); return render(); }
+    if (act === 'edit') { state.view = 'manage'; state.editing = button.dataset.id; state.editingCollectionIds = collectionIdsForPhrase_(state.editing); return render(); }
     if (act === 'cancel-editor') { state.editing = null; state.editingCollectionIds = null; return render(); }
     if (act === 'save-phrase') return savePhrase();
     if (act === 'translate') return translateToGerman();
     if (act === 'translate-to-es') return translateToSpanish();
     if (act === 'etymology') return showEtymology();
     if (act === 'page') {
-      var pageKey = button.dataset.list === 'manage' ? 'managePage' : button.dataset.list === 'collection' ? 'collectionPage' : button.dataset.list === 'collection-editor' ? 'collectionEditorPage' : button.dataset.list === 'collection-candidates' ? 'collectionCandidatePage' : 'studyPage';
-      state[pageKey] += Number(button.dataset.direction);
-      if (button.dataset.list === 'manage') return renderManageList();
-      if (button.dataset.list === 'collection' || button.dataset.list === 'collection-editor' || button.dataset.list === 'collection-candidates') return renderCollections();
-      return renderStudyList();
+      if (button.dataset.list === 'manage') { state.managePage += Number(button.dataset.direction); return renderManageList(); }
+      state.session.page += Number(button.dataset.direction);
+      return renderPracticeList();
     }
     if (act === 'delete') return removePhrase(button.dataset.id);
     if (act === 'copy') {
@@ -2034,7 +1529,7 @@
       if (event.target.dataset.generatorField === 'de') originalChanged_(draftIndex);
     }
     else if (event.target.id === 'manage-search') { state.manageQuery = event.target.value; state.managePage = 1; renderManageList(); }
-    else if (event.target.id === 'study-search') { state.studyQuery = event.target.value; state.studyPage = 1; renderStudyList(); }
+    else if (event.target.id === 'practice-search') { state.session.query = event.target.value; refreshPractice_(); renderPracticeList(); }
     else if (event.target.id === 'import-text') state.importText = event.target.value;
     else if (event.target.id === 'etymology-source') state.etymologyText = event.target.value;
     else if (event.target.id === 'collection-search') {
@@ -2043,13 +1538,6 @@
       renderCollections();
       var collectionSearch = document.getElementById('collection-search');
       if (collectionSearch) { collectionSearch.focus(); collectionSearch.setSelectionRange(collectionCursor, collectionCursor); }
-    } else if (event.target.id === 'collection-phrase-search') {
-      var phraseCursor = event.target.selectionStart;
-      state.collectionPhraseQuery = event.target.value;
-      state.collectionCandidatePage = 1;
-      renderCollections();
-      var phraseSearch = document.getElementById('collection-phrase-search');
-      if (phraseSearch) { phraseSearch.focus(); phraseSearch.setSelectionRange(phraseCursor, phraseCursor); }
     }
   });
   el.app.addEventListener('change', function (event) {
@@ -2110,25 +1598,30 @@
       clearPrintDownload_();
       state.printLineHeight = Number(event.target.value);
       return renderPrint();
-    } else if (event.target.matches('[data-collection-candidate]')) {
-      state.collectionSelection[event.target.value] = event.target.checked;
-      renderCollections();
+    } else if (event.target.matches('[data-phrase-filter]')) {
+      var list = event.target.dataset.phraseFilter;
+      var ids = list === 'manage' ? state.manageCollectionIds : state.session.collectionIds;
+      if (event.target.checked) ids.push(event.target.value);
+      else ids.splice(ids.indexOf(event.target.value), 1);
+      document.getElementById(list + '-collection-summary').textContent = collectionFilterLabel_(ids);
+      if (list === 'manage') { state.managePage = 1; renderManageList(); }
+      else { refreshPractice_(); renderPracticeList(); }
     } else if (event.target.id === 'import-header') state.importHasHeader = event.target.checked;
-    else if (event.target.id === 'session-phase') setPhase_(event.target.value);
-    else if (event.target.id === 'session-order') setSessionOrder_(event.target.value);
-    else if (event.target.id === 'player-rate') setPlayerSetting_('rate', event.target.value);
-    else if (event.target.id === 'player-pause') setPlayerSetting_('pause', event.target.value);
-    else if (event.target.id === 'player-reps') setPlayerSetting_('reps', event.target.value);
+    else if (event.target.name === 'delimiter') state.importDelimiter = event.target.value === 'tab' ? '\t' : ',';
+    else if (/^import-(de|es|pronunciation|kana)$/.test(event.target.id)) state.importColumns[event.target.id.slice(7)] = Number(event.target.value);
+    else if (event.target.id === 'session-order') { state.session.order = event.target.value; refreshPractice_(); renderPracticeList(); }
+    else if (event.target.id === 'ssml-pause' || event.target.id === 'ssml-reps') {
+      state.ssmlSettings[event.target.id.slice(5)] = Number(event.target.value);
+      try { localStorage.setItem('sprache-lernen-ssml-settings', JSON.stringify(state.ssmlSettings)); } catch (err) {}
+    }
   });
-  if (window.speechSynthesis && window.speechSynthesis.addEventListener) {
-    window.speechSynthesis.addEventListener('voiceschanged', updatePlayerUi_);
-  } else if (window.speechSynthesis) {
-    window.speechSynthesis.onvoiceschanged = updatePlayerUi_;
-  }
+  el.app.addEventListener('toggle', function (event) {
+    if (event.target.id === 'import-panel') state.importOpen = event.target.open;
+    else if (event.target.id === 'ssml-options') state.session.ssmlOpen = event.target.open;
+  }, true);
   document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape' && state.detailId) { state.detailId = null; state.revealed = false; render(); }
-    else if (event.key === 'Escape' && state.editing !== null) { state.editing = null; state.editingCollectionIds = null; render(); }
-    else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && (state.editing !== null || state.collectionPhraseDraft)) { event.preventDefault(); savePhrase(); }
+    if (event.key === 'Escape' && state.editing !== null) { state.editing = null; state.editingCollectionIds = null; render(); }
+    else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && state.editing !== null) { event.preventDefault(); savePhrase(); }
   });
 
   el.screen.innerHTML = '<div class="empty">Cargando frases…</div>';

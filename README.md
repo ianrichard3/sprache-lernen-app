@@ -27,13 +27,13 @@ Script Properties no se copian al pegar el código.
 
 ## Datos y rendimiento
 
-Al abrir, la app carga un único snapshot de frases, historial y colecciones.
-Navegar entre pantallas y abrir colecciones usa ese estado local; las
+Al abrir, la app carga un único snapshot de frases y colecciones.
+Navegar entre pantallas y filtrar colecciones usa ese estado local; las
 mutaciones hacen una sola llamada y actualizan el estado recibido. Si editás
 la planilla directamente mientras la app está abierta, usá **Actualizar datos**
 antes de seguir trabajando para traer esos cambios sin pisarlos.
 
-La pantalla **Material** permite previsualizar y editar las frases, y descargar
+**Herramientas → Preparar material para imprimir** permite previsualizar y editar las frases, y descargar
 HTML con tabla, tipografía grande y espaciado ajustable. También conserva la
 descarga Markdown para usarla con otro editor. Ejecutá **Sprache Lernen App →
 Preparar hoja** para aplicar los encabezados de las columnas nuevas.
@@ -47,15 +47,37 @@ a GitHub Secrets: el backend la lee al traducir o analizar etimología.
 Después del próximo despliegue, autorizá el permiso de solicitudes externas de
 Apps Script cuando Google lo pida.
 
-## Audio de colecciones
+## Frases, colecciones y práctica
 
-El reproductor usa la voz del idioma objetivo instalada en el navegador mediante
-Web Speech API. No requiere API key, facturación ni guarda archivos MP3. Si el dispositivo no tiene una voz
-compatible, la app lo indica y deja el resto de funciones usable.
+**Todas las Frases** es la pantalla inicial: permite crear, editar, borrar y
+asignar frases a una o varias colecciones. La importación CSV/TSV empieza plegada;
+conserva el contenido y el mapeo de columnas al navegar, y permanece abierta
+durante la vista previa y los errores. **Colecciones** permite crear, renombrar
+y borrar colecciones; borrar una conserva las frases y sus otras asociaciones.
+
+**Estudiar Frases** muestra una lista con búsqueda y filtro por una o varias
+colecciones. Ambas pantallas unen las colecciones seleccionadas sin repetir
+frases, incluyen **Sin colección** y muestran todas cuando no hay selección.
+Los filtros se aplican antes de paginar, a 25 frases por página.
+
+La práctica empieza en **Aleatorio** y también permite **Más recientes primero**.
+El orden aleatorio se conserva al paginar, revelar frases y copiar SSML.
+Los botones globales controlan objetivo, traducción y pronunciación. Tocar una
+frase revela sus campos ocultos; tocarla otra vez los oculta. Los botones
+globales restablecen la visibilidad de toda la lista.
+
+**Copiar SSML** incluye todas las frases filtradas, también las otras páginas,
+en el orden del listado. **Ajustes de SSML** permite elegir pausas de 1, 2, 3 o
+5 segundos y de 1 a 5 repeticiones; estos valores se conservan en el navegador.
+La app ya no reproduce audio ni usa fases o evaluaciones. La hoja Historial
+existente se conserva, pero la app deja de crearla, leerla y modificarla.
+
+**Herramientas** agrupa **Preparar material para imprimir**, **Generar frases
+con IA** y **Explorar la etimología**, y recuerda la última herramienta abierta.
 
 ## Generador de frases
 
-En **Generar**, escribí una situación o temática y elegí **Intermedio (B1–B2)**
+En **Herramientas → Generar frases con IA**, escribí una situación o temática y elegí **Intermedio (B1–B2)**
 o **Avanzado (C1–C2)** para obtener 10 frases en el idioma objetivo con
 traducción natural al idioma configurado, usando la misma clave Gemini.
 Revisá y editá los resultados y marcá las frases que quieras guardar. Elegir
@@ -89,7 +111,7 @@ Conserva las formas conjugadas completas
 y omite palabras escritas sólo en kana. Si el original no contiene kanji, la app
 avisa que no necesita furigana, conserva las ayudas existentes y no llama a la IA.
 **Sugerir romaji con IA** y **Sugerir furigana con IA** son botones independientes
-en el editor y en cada borrador de **Generar**: cada uno pide y completa sólo
+en el editor y en cada borrador de **Generar frases con IA**: cada uno pide y completa sólo
 su campo. Podés editar las ayudas y las sugerencias no guardan automáticamente.
 La columna existente se reutiliza: las lecturas anteriores se conservan hasta
 volver a sugerirlas y guardar. Para otros idiomas,
@@ -97,8 +119,8 @@ se pide la romanización convencional, como pinyin con tonos para mandarín.
 Si cambiás el original, la app avisa que revises sus ayudas.
 
 **Mostrar/ocultar pronunciación** controla ambas ayudas japonesas a la vez.
-En los ejercicios, sólo aparecen cuando el original está visible; el audio
-siempre lee el original. La búsqueda también encuentra furigana y romanización.
+En la práctica, sólo aparecen cuando el original está visible o la frase se
+revela individualmente. La búsqueda también encuentra furigana y romanización.
 
 CSV y TSV permiten mapear columnas opcionales de pronunciación y furigana.
 Los archivos de dos columnas siguen funcionando. HTML y Markdown muestran
@@ -111,4 +133,6 @@ marca **Incluida en material**, para volver a generar la frase corregida.
 
 Verificación local: ejecutá los `test-*.mjs` con Node. Las pruebas no requieren
 dependencias adicionales, salvo `test-preview-flow.mjs`, que usa Firefox
-instalado para comprobar la edición de la vista previa y el audio al revelar.
+instalado para comprobar la navegación, filtros, práctica y edición de la vista
+previa. Ejecutá `node test-preview-flow.mjs` para escritorio y
+`node test-preview-flow.mjs --mobile` para móvil.
