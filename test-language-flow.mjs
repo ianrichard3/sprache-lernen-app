@@ -9,6 +9,30 @@ const english = {name:'inglés', locale:'en-US'};
 const example = 'まだ日本語のネイティブの本を1冊も読めていません。';
 const furigana = '日本語（にほんご）   ---   本（ほん）   ---   1冊（いっさつ）   ---   読めていません（よめていません）';
 const coffeeFurigana = '今日（きょう）   ---   飲みます（のみます）';
+const bandCases = [
+  ['バンドを組みたいので、メンバーを探しています。', '組みたい（くみたい）   ---   探しています（さがしています）', '組む（くむ）   ---   探す（さがす）'],
+  ['週末に一緒にスタジオに入ってセッションしませんか？', '週末（しゅうまつ）   ---   一緒（いっしょ）   ---   入って（はいって）', '週末（しゅうまつ）   ---   一緒に（いっしょに）   ---   入る（はいる）'],
+  ['ギターのパートを手伝ってくれる人を探しています。', '手伝ってくれる（てつだってくれる）   ---   人（ひと）   ---   探しています（さがしています）', '手伝う（てつだう）   ---   人（ひと）   ---   探す（さがす）'],
+  ['興味があれば、気軽にメッセージをください。', '興味（きょうみ）   ---   気軽（きがる）', '興味（きょうみ）   ---   気軽に（きがるに）'],
+  ['急にメンバーが足りなくなったら、いつでも声をかけてください。', '急（きゅう）   ---   足りなくなったら（たりなくなったら）   ---   声（こえ）', '急に（きゅうに）   ---   足りる（たりる）   ---   声（こえ）'],
+  ['急な代役を探しているバンドがあれば、ぜひ紹介してください。', '急な（きゅうな）   ---   代役（だいやく）   ---   探している（さがしている）   ---   紹介してください（しょうかいしてください）', '急（きゅう）   ---   代役（だいやく）   ---   探す（さがす）   ---   紹介（しょうかい）']
+];
+// Readings and spellings checked against the public Jisho API; tests stay offline.
+const jishoWords = [
+  ['組', '組む', 'くむ'], ['探', '探す', 'さがす'], ['週末', '週末', 'しゅうまつ'],
+  ['一緒', '一緒に', 'いっしょに'], ['入', '入る', 'はいる'], ['手伝', '手伝う', 'てつだう'],
+  ['人', '人', 'ひと'], ['興味', '興味', 'きょうみ'], ['気軽', '気軽に', 'きがるに'],
+  ['急に', '急に', 'きゅうに'], ['急', '急', 'きゅう'], ['足', '足りる', 'たりる'], ['声', '声', 'こえ'],
+  ['代役', '代役', 'だいやく'], ['紹介', '紹介', 'しょうかい'],
+  ['取り扱', '取り扱う', 'とりあつかう'], ['読み書', '読み書き', 'よみかき'], ['思い出', '思い出す', 'おもいだす'],
+  ['気が付', '気が付く', 'きがつく', [{word:'気がつく', reading:'きがつく'}, {word:'気が付く', reading:'きがつく'}]],
+  ['毎朝', '毎朝', 'まいあさ'], ['勉強', '勉強', 'べんきょう'],
+  ['日本語', '日本語', 'にほんご'], ['教師', '教師', 'きょうし'],
+  ['ひとり暮', '一人暮らし', 'ひとりぐらし'], ['暮', '暮らし', 'くらし'],
+  ['お金', 'お金', 'おかね'], ['本', '本', 'ほん'], ['読', '読む', 'よむ']
+];
+let jishoBody, jishoStatus = 200, beforeJishoResponse;
+const jishoQueries = [];
 
 // Execute the actual backend against Sheets that enforce range widths.
 function sheet(name, rows, columns = 26) {
@@ -54,7 +78,7 @@ const properties = new Map([['APP_SPREADSHEET_ID', 'sheet-1'], ['APP_TARGET_LANG
 const propertyStore = {getProperty:key => properties.get(key) ?? null, setProperty:(key, value) => properties.set(key, value), deleteProperty:key => properties.delete(key)};
 const spreadsheet = {getSheetByName:name => sheets[name]};
 let instruction, input, response, beforeResponse, responseCalls = 0;
-const api = Function('PropertiesService', 'SpreadsheetApp', 'LockService', 'Utilities', 'Session', 'aiResponse', `
+const api = Function('PropertiesService', 'SpreadsheetApp', 'LockService', 'Utilities', 'Session', 'aiResponse', 'UrlFetchApp', `
   ${code}\n${ai}
   geminiText_ = (prompt, text) => aiResponse(prompt, text);
   return {targetLanguage_, saveLanguageSettings, loadAppData, savePhrase, saveGeneratedPhrases, importPhrases,
@@ -66,7 +90,18 @@ const api = Function('PropertiesService', 'SpreadsheetApp', 'LockService', 'Util
   {getScriptLock:() => ({waitLock() {}, releaseLock() {}})},
   {formatDate:() => 'FECHA', parseCsv:(text, delimiter) => text.trim().split('\n').map(row => row.split(delimiter))},
   {getScriptTimeZone:() => 'UTC'},
-  (prompt, text) => { responseCalls++; instruction = prompt; input = text; if (beforeResponse) beforeResponse(); return response; }
+  (prompt, text) => { responseCalls++; instruction = prompt; input = text; if (beforeResponse) beforeResponse(); return response; },
+  {fetch(url, options) {
+    assert.equal(options.muteHttpExceptions, true);
+    assert.ok(url.startsWith('https://jisho.org/api/v1/search/words?keyword='));
+    assert.doesNotMatch(url, /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u, 'URL encodes the query');
+    const query = decodeURIComponent(url.split('?keyword=')[1]);
+    jishoQueries.push(query);
+    if (beforeJishoResponse) beforeJishoResponse();
+    const word = jishoWords.find(([prefix]) => query.startsWith(prefix));
+    const body = jishoBody === undefined ? {meta:{status:200}, data:word ? [{japanese:word[3] || [{word:word[1], reading:word[2]}]}] : []} : jishoBody;
+    return {getResponseCode:() => jishoStatus, getContentText:() => typeof body === 'string' ? body : JSON.stringify(body)};
+  }}
 );
 // A direct grid edit must migrate a physically nine-column sheet before reading it.
 const legacyRow = sheets.Frases.rows[1].slice();
@@ -223,6 +258,9 @@ for (const [original, line] of [
   ['読めていません。', '読め（よめ）'],
   ['読めていません。', '読めていま（よめていま）'],
   ['日本語', '日本（にほん）   ---   語（ご）'],
+  ['取り扱います。', '取り（とり）   ---   扱います（あつかいます）'],
+  ['読み書きします。', '読み（よみ）   ---   書きします（かきします）'],
+  ['思い出した。', '思い（おもい）   ---   出した（だした）'],
   [example, '本（ほん）   ---   日本語（にほんご）   ---   1冊（いっさつ）   ---   読めていません（よめていません）']
 ]) {
   response = line;
@@ -233,6 +271,11 @@ for (const [original, line] of [
   ['1.5時間かかります。', '1.5時間（いってんごじかん）'],
   ['3,000,000円です。', '3,000,000円（さんびゃくまんえん）'],
   ['取り扱います。', '取り扱います（とりあつかいます）'],
+  ['気が付いた。', '気が付いた（きがついた）'],
+  ['気が付いています。', '気が付いています（きがついています）'],
+  ['毎朝勉強しています。', '毎朝（まいあさ）   ---   勉強しています（べんきょうしています）'],
+  ['日本語教師です。', '日本語（にほんご）   ---   教師（きょうし）'],
+  ['探していますので、声をかけてください。', '探しています（さがしています）   ---   声（こえ）'],
   ['飲みます。', '飲みます（ノミマス）'],
   ['山の手', '山の手（やまのて）'],
   ['女の子', '女の子（おんなのこ）'],
@@ -241,6 +284,15 @@ for (const [original, line] of [
 ]) {
   response = line;
   assert.deepEqual(api.suggestPronunciation(original, 1, 'kana'), {pronunciation:'', kana:line}, original);
+}
+for (const [word, reading] of [
+  ['探しています', 'さがしています'], ['読みます', 'よみます'], ['食べたい', 'たべたい'],
+  ['読めていません', 'よめていません'], ['手伝ってくれる', 'てつだってくれる'], ['紹介してください', 'しょうかいしてください']
+]) {
+  for (let end = word.search(/\p{Script=Hiragana}/u) + 1; end < word.length; end++) {
+    response = word.slice(0, end) + '（' + reading.slice(0, reading.length - (word.length - end)) + '）';
+    assert.throws(() => api.suggestPronunciation(word + '。', 1, 'kana'), /furigana inválido/, word + ': ' + response);
+  }
 }
 for (const invalid of ['texto extra', '{}', JSON.stringify({kana:furigana}), null, '', 'まだにほんごのねいてぃぶのほんをいっさつもよめていません。', '本（hon）', '本（本）', 'ねこ（ねこ）', '猫（ねこ）', '本（ほん）説明', '本（ほん）\n日本語（にほんご）', example + '（まだにほんご）', ...['\n', '\r', '\r\n', ' --- ', '  ---  ', '    ---    ', '   --   ', '   —   ', '   ---   \n'].map(separator => furigana.replaceAll('   ---   ', separator))]) {
   response = invalid;
@@ -253,6 +305,73 @@ response = '本（ほん）';
 assert.deepEqual(api.suggestPronunciation('本', 1, 'kana'), {pronunciation:'', kana:response});
 assert.throws(() => api.suggestPronunciation(example, 1, 'both'), /ayuda de pronunciación válida/);
 assert.throws(() => api.suggestPronunciation('', 1, 'kana'), /texto original/);
+
+// IA must still work during a Jisho outage without accepting split compounds.
+jishoStatus = 429;
+response = bandCases[2][1];
+assert.equal(api.suggestPronunciation(bandCases[2][0], 1, 'kana').kana, response);
+response = '取り（とり）   ---   扱います（あつかいます）';
+assert.throws(() => api.suggestPronunciation('取り扱います。', 1, 'kana'), /furigana inválido/);
+response = '取り扱います（とりあつかいます）';
+assert.equal(api.suggestPronunciation('取り扱います。', 1, 'kana').kana, response);
+jishoStatus = 200;
+
+for (const [original, aiLine, jishoLine] of bandCases) {
+  response = aiLine;
+  assert.deepEqual(api.suggestPronunciation(original, 1, 'kana'), {pronunciation:'', kana:aiLine});
+  const aiCalls = responseCalls;
+  assert.deepEqual(api.suggestPronunciation(original, 1, 'kana', 'jisho'), {pronunciation:'', kana:jishoLine});
+  assert.equal(responseCalls, aiCalls, 'Jisho never calls Gemini');
+}
+assert.equal(api.suggestPronunciation('取り扱います。', 1, 'kana', 'jisho').kana, '取り扱う（とりあつかう）');
+assert.equal(api.suggestPronunciation('お金がありません。', 1, 'kana', 'jisho').kana, 'お金（おかね）');
+for (const [phrase, expected] of [
+  ['毎朝勉強しています。', '毎朝（まいあさ）   ---   勉強（べんきょう）'],
+  ['日本語教師です。', '日本語（にほんご）   ---   教師（きょうし）'],
+  ['ひとり暮らしです。', '一人暮らし（ひとりぐらし）'],
+  ['私はひとり暮らしです。', '私（わたし）   ---   一人暮らし（ひとりぐらし）']
+]) {
+  if (phrase.startsWith('私')) jishoWords.push(['私', '私', 'わたし']);
+  assert.equal(api.suggestPronunciation(phrase, 1, 'kana', 'jisho').kana, expected, phrase);
+}
+const beforeRepeated = jishoQueries.length;
+assert.equal(api.suggestPronunciation('本を読む。本を読む。', 1, 'kana', 'jisho').kana,
+  '本（ほん）   ---   読む（よむ）   ---   本（ほん）   ---   読む（よむ）');
+assert.equal(jishoQueries.length - beforeRepeated, 2, 'Repeated lookups within a request are reused');
+const beforeNoKanji = jishoQueries.length;
+assert.deepEqual(api.suggestPronunciation('ありがとう。', 1, 'kana', 'jisho'), {pronunciation:'', kana:''});
+assert.equal(jishoQueries.length, beforeNoKanji);
+for (const args of [['本', 1, 'pronunciation', 'jisho'], ['本', 1, 'kana', 'other'], ['本', 0, 'kana', 'jisho']]) {
+  assert.throws(() => api.suggestPronunciation(...args), /proveedor válido|idioma cambió/);
+}
+assert.equal(jishoQueries.length, beforeNoKanji, 'Invalid requests never query Jisho');
+assert.throws(() => api.suggestPronunciation('猫と犬。', 1, 'kana', 'jisho'), /猫、犬.*existente se conserva/);
+jishoStatus = 429;
+assert.throws(() => api.suggestPronunciation('本', 1, 'kana', 'jisho'), /Jisho no pudo responder/);
+jishoStatus = 200;
+for (const body of ['not JSON', null, {}, {meta:{status:500}, data:[]}, {meta:{status:200}, data:{}}]) {
+  jishoBody = body;
+  assert.throws(() => api.suggestPronunciation('本', 1, 'kana', 'jisho'), /respuesta inválida/);
+}
+for (const pair of [null, {word:'本', reading:'hon'}, {word:'本', reading:'本'}, {word:'猫', reading:'ねこ'}, {reading:'ほん'}, {word:'本', reading:4}, {word:'本\n', reading:'ほん'}]) {
+  jishoBody = {meta:{status:200}, data:[null, {japanese:[pair]}]};
+  assert.throws(() => api.suggestPronunciation('本', 1, 'kana', 'jisho'), /no encontró una lectura/);
+}
+jishoBody = {meta:{status:200}, data:[{japanese:[{word:'捜す', reading:'さがす'}, {word:'探す', reading:'さがす'}]}]};
+assert.equal(api.suggestPronunciation('探しています。', 1, 'kana', 'jisho').kana, '探す（さがす）');
+jishoBody = {meta:{status:200}, data:[{japanese:[{word:'週末婚', reading:'しゅうまつこん'}]}, {japanese:[{word:'週末', reading:'しゅうまつ'}]}]};
+assert.equal(api.suggestPronunciation('週末です。', 1, 'kana', 'jisho').kana, '週末（しゅうまつ）');
+jishoBody = {meta:{status:200}, data:[{japanese:[{word:'一冊', reading:'いっさつ'}, {word:'１冊', reading:'いっさつ'}]}]};
+assert.equal(api.suggestPronunciation('1冊。', 1, 'kana', 'jisho').kana, '１冊（いっさつ）');
+jishoBody = {meta:{status:200}, data:[{japanese:[{word:'日本', reading:'にほん'}]}]};
+assert.throws(() => api.suggestPronunciation('日本語。', 1, 'kana', 'jisho'), /no encontró una lectura/);
+jishoBody = undefined;
+const priorLanguage = properties.get('APP_TARGET_LANGUAGE');
+beforeJishoResponse = () => properties.set('APP_TARGET_LANGUAGE', JSON.stringify({...japanese, version:2}));
+assert.throws(() => api.suggestPronunciation('本', 1, 'kana', 'jisho'), /idioma cambió/);
+beforeJishoResponse = null;
+properties.set('APP_TARGET_LANGUAGE', priorLanguage);
+console.log('Jisho dictionary suggestions and six reported furigana regressions: OK');
 
 // The one-line furigana and its exact spaces survive storage and exports.
 const didactic = api.saveGeneratedPhrases({items:[{de:example, es:'Todavía no pude leer ni un libro nativo en japonés.', pronunciation:'', kana:''}], collectionIds:[], expectedLanguageVersion:1}).results[0].item;
@@ -313,7 +432,9 @@ fields['f-de'].value = payload.de;
 let success, failure, calls = 0, sent, renders = 0, message;
 const button = {dataset:{index:'0', field:'pronunciation'}, disabled:false, textContent:'Sugerir romaji con IA'};
 const furiganaButton = {dataset:{index:'0', field:'kana'}, disabled:false, textContent:'Sugerir furigana con IA'};
-const run = {withSuccessHandler(fn) { success = fn; return this; }, withFailureHandler(fn) { failure = fn; return this; }, suggestPronunciation(text, version, field) { calls++; sent = [text, version, field]; }};
+const jishoButton = {dataset:{index:'0', field:'kana', provider:'jisho'}, disabled:false, textContent:'Buscar furigana con Jisho'};
+let editorActions = [];
+const run = {withSuccessHandler(fn) { success = fn; return this; }, withFailureHandler(fn) { failure = fn; return this; }, suggestPronunciation(text, version, field, provider) { calls++; sent = [text, version, field, provider]; }};
 const screen = {innerHTML:''};
 const client = Function('state', 'document', 'google', 'screen', `
   var el = {screen};
@@ -326,10 +447,10 @@ const client = Function('state', 'document', 'google', 'screen', `
   ${between('  function originalChanged_(', '  function translateToGerman()')}
   ${between('  function matchingItems(', '  function filterCollectionItems_(')}
   return {suggestPronunciation_, originalChanged_, pronunciationFieldsHtml_, row:sessionRowHtml_, matchingItems};
-`)(state, {getElementById:id => fields[id] || null, body:{contains:() => true}}, {script:{run}, rendered() { renders++; }, notified(text) { message = text; }}, screen);
+`)(state, {getElementById:id => fields[id] || null, querySelectorAll:() => editorActions, body:{contains:() => true}}, {script:{run}, rendered() { renders++; }, notified(text) { message = text; }}, screen);
 client.suggestPronunciation_(button);
 assert.equal(state.languageBusy, 1);
-assert.deepEqual(sent, [payload.de, 1, 'pronunciation']);
+assert.deepEqual(sent, [payload.de, 1, 'pronunciation', 'ai']);
 assert.equal(renders, 1, 'Pending draft renders disabled controls immediately');
 assert.match(client.pronunciationFieldsHtml_(state.generator.items[0], 0, ' disabled'), /data-field="kana"[^>]* disabled/);
 client.suggestPronunciation_(furiganaButton);
@@ -347,14 +468,27 @@ assert.match(warningHtml, /generated-kana-0/);
 assert.match(warningHtml, /generated-pronunciation-0/);
 assert.match(warningHtml, /data-field="kana"[^>]*>Sugerir furigana con IA/);
 assert.match(warningHtml, /data-field="pronunciation"[^>]*>Sugerir romaji con IA/);
+assert.ok(warningHtml.indexOf('Buscar furigana con Jisho') < warningHtml.indexOf('Sugerir furigana con IA'));
 assert.doesNotMatch(warningHtml, /sin kanji/);
 client.suggestPronunciation_(furiganaButton);
-assert.deepEqual(sent, [payload.de, 1, 'kana']);
+assert.deepEqual(sent, [payload.de, 1, 'kana', 'ai']);
 state.generator.items[0].pronunciation = 'Manual romaji during furigana request';
 success({pronunciation:'', kana:coffeeFurigana});
 assert.equal(state.generator.items[0].kana, coffeeFurigana);
 assert.equal(state.generator.items[0].pronunciation, 'Manual romaji during furigana request');
 assert.equal(furiganaButton.textContent, 'Sugerir furigana con IA');
+client.suggestPronunciation_(jishoButton);
+assert.deepEqual(sent, [payload.de, 1, 'kana', 'jisho']);
+assert.match(client.pronunciationFieldsHtml_(state.generator.items[0], 0, ''), /data-provider="jisho"[^>]* disabled>Sugiriendo…/);
+const pendingCalls = calls;
+client.suggestPronunciation_(furiganaButton);
+assert.equal(calls, pendingCalls, 'AI cannot overlap a Jisho request');
+failure({message:'Jisho no encontró una lectura'});
+assert.equal(state.generator.items[0].kana, coffeeFurigana, 'Jisho failure preserves the previous suggestion');
+client.suggestPronunciation_(jishoButton);
+success({pronunciation:'', kana:'今日（きょう）   ---   飲む（のむ）'});
+assert.equal(state.generator.items[0].kana, '今日（きょう）   ---   飲む（のむ）');
+assert.equal(jishoButton.textContent, 'Buscar furigana con Jisho');
 client.originalChanged_(0);
 assert.deepEqual(state.generator.items[0].pronunciationNeedsReview, {pronunciation:true, kana:true});
 client.suggestPronunciation_(button);
@@ -382,6 +516,8 @@ assert.equal(calls, callsBeforeEmptyDraft);
 assert.equal(state.generator.items[0].kana, oldDraftKana);
 const editorButton = {dataset:{field:'pronunciation'}, disabled:false, textContent:'Sugerir romaji con IA'};
 const editorFuriganaButton = {dataset:{field:'kana'}, disabled:false, textContent:'Sugerir furigana con IA'};
+const editorJishoButton = {dataset:{field:'kana', provider:'jisho'}, disabled:false, textContent:'Buscar furigana con Jisho'};
+editorActions = [editorButton, editorFuriganaButton, editorJishoButton];
 fields['f-kana'].value = payload.kana;
 const callsBeforeEmptyEditor = calls;
 fields['f-de'].value = 'ありがとう。';
@@ -391,7 +527,7 @@ assert.equal(calls, callsBeforeEmptyEditor);
 assert.equal(fields['f-kana'].value, payload.kana);
 fields['f-de'].value = payload.de;
 client.suggestPronunciation_(editorButton);
-assert.deepEqual(sent, [payload.de, 1, 'pronunciation']);
+assert.deepEqual(sent, [payload.de, 1, 'pronunciation', 'ai']);
 success({pronunciation:payload.pronunciation, kana:''});
 assert.equal(fields['f-kana'].value, payload.kana);
 assert.equal(fields['f-pronunciation'].value, payload.pronunciation);
@@ -401,7 +537,7 @@ client.suggestPronunciation_(editorButton);
 success({pronunciation:payload.pronunciation, kana:''});
 assert.equal(fields['f-pronunciation-warning'].hidden, false, 'Furigana still needs review');
 client.suggestPronunciation_(editorFuriganaButton);
-assert.deepEqual(sent, [payload.de, 1, 'kana']);
+assert.deepEqual(sent, [payload.de, 1, 'kana', 'ai']);
 fields['f-pronunciation'].value = 'Manual romaji';
 success({pronunciation:'', kana:coffeeFurigana});
 assert.equal(fields['f-kana'].value, coffeeFurigana);
@@ -429,7 +565,29 @@ state.language = {...japanese, version:2};
 success({pronunciation:'', kana:coffeeFurigana});
 assert.equal(fields['f-kana'].value, 'Manual furigana during request', 'Late language response is ignored');
 state.language = japanese;
+fields['f-de'].value = bandCases[0][0];
+const beforeEditorJisho = fields['f-kana'].value;
+client.suggestPronunciation_(editorJishoButton);
+assert.deepEqual(sent, [bandCases[0][0], 1, 'kana', 'jisho']);
+assert.ok(editorActions.every(action => action.disabled), 'Editor disables both providers and romaji');
+const editorPendingCalls = calls;
+client.suggestPronunciation_(editorFuriganaButton);
+assert.equal(calls, editorPendingCalls);
+failure({message:'Jisho no encontró una lectura'});
+assert.equal(fields['f-kana'].value, beforeEditorJisho);
+assert.ok(editorActions.every(action => !action.disabled));
+client.suggestPronunciation_(editorJishoButton);
+fields['f-kana'].value = 'Edición manual durante Jisho';
+success({pronunciation:'', kana:bandCases[0][2]});
+assert.equal(fields['f-kana'].value, 'Edición manual durante Jisho');
+client.suggestPronunciation_(editorJishoButton);
+success({pronunciation:'', kana:bandCases[0][2]});
+assert.equal(fields['f-kana'].value, bandCases[0][2]);
+client.suggestPronunciation_(editorFuriganaButton);
+success({pronunciation:'', kana:bandCases[0][1]});
+assert.equal(fields['f-kana'].value, bandCases[0][1], 'AI replaces Jisho only when clicked');
 const editorHtml = client.pronunciationFieldsHtml_({...payload, kana:coffeeFurigana}, null, '');
+assert.ok(editorHtml.indexOf('Buscar furigana con Jisho') < editorHtml.indexOf('Sugerir furigana con IA'));
 assert.match(editorHtml, /data-field="kana"[^>]*>Sugerir furigana con IA/);
 assert.match(editorHtml, /data-field="pronunciation"[^>]*>Sugerir romaji con IA/);
 const japaneseItem = {...payload, id:'F1', notes:'', tags:[]};
@@ -449,6 +607,7 @@ assert.deepEqual(client.matchingItems([japaneseItem], 'KYŌ'), [japaneseItem]);
 assert.deepEqual(client.matchingItems([{...japaneseItem, kana:coffeeFurigana}], 'のみます'), [{...japaneseItem, kana:coffeeFurigana}]);
 state.language = {name:'ruso', locale:'ru-RU', translation:english};
 assert.doesNotMatch(client.pronunciationFieldsHtml_(russian, null, ''), /id="f-kana"/);
+assert.doesNotMatch(client.pronunciationFieldsHtml_(russian, null, ''), /Jisho/);
 assert.match(client.pronunciationFieldsHtml_(russian, null, ''), /Dobroye utro/);
 assert.match(client.pronunciationFieldsHtml_(russian, null, ''), /Sugerir pronunciación con IA/);
 assert.doesNotMatch(html, /SpeechSynthesisUtterance|speechSynthesis/);

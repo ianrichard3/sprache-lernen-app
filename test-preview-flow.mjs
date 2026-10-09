@@ -39,8 +39,8 @@ window.google={script:{get run() {
  return new Proxy({}, {get:function(_,key) {
   if(key==='withSuccessHandler') return function(fn){success=fn;return this;};
   if(key==='withFailureHandler') return function(fn){failure=fn;return this;};
-  return function(payload,version,field) {
-   calls.push([key,payload,version,field]);
+  return function(payload,version,field,provider) {
+   calls.push([key,payload,version,field,provider]);
    if(deferWrites && ['createCollection','savePhrase','saveGeneratedPhrases'].includes(key)) {
     var reply=success;success=value=>pendingWrites.push(()=>reply(structuredClone(value)));
    }
@@ -119,13 +119,27 @@ const smoke = String.raw`<script>
   check(!node('#f-pronunciation-warning').hidden,'furigana still needs review');
   click('[data-field="kana"][data-act="suggest-pronunciation"]');
   check(calls.at(-1)[3]==='kana','request only furigana');
+  check(calls.at(-1)[4]==='jisho','Jisho is the first furigana action');
+  check(node('[data-field="kana"][data-provider="ai"]').disabled,'AI disabled while Jisho is pending');
+  var dictionaryFurigana='今日（きょう）   ---   飲む（のむ）';
+  deferredPronunciation({pronunciation:'',kana:dictionaryFurigana});
+  check(node('#f-kana').value===dictionaryFurigana,'Jisho fills dictionary forms');
+  click('[data-field="kana"][data-provider="ai"]');
+  check(calls.at(-1)[4]==='ai','AI is requested explicitly after Jisho');
   node('#f-pronunciation').value='Manual romaji';
   deferredPronunciation({pronunciation:'',kana:furigana});
   check(node('#f-pronunciation').value==='Manual romaji','furigana preserves edits to romaji');
   check(node('#f-kana').value===furigana,'one-line furigana fills its field with exact spaces');
   check(node('#f-de').value===snapshot.items[0].de,'original stays unchanged');
   check(node('#f-pronunciation-warning').hidden,'both aids reviewed');
-  check(calls.filter(call=>call[0]==='suggestPronunciation').length===2,'one request per click');
+  check(calls.filter(call=>call[0]==='suggestPronunciation').length===3,'one request per click');
+  click('[data-field="kana"][data-provider="jisho"]');
+  click('[data-act="refresh-data"]');
+  check(node('[data-field="kana"][data-provider="ai"]').disabled,'rerender keeps pending provider buttons disabled');
+  deferredPronunciation({pronunciation:'',kana:dictionaryFurigana});
+  check(node('#f-kana').value===furigana,'response from replaced editor does not overwrite its draft');
+  check(!node('[data-field="kana"][data-provider="ai"]').disabled,'rerendered AI button reenabled after Jisho completes');
+  check(!node('[data-field="kana"][data-provider="jisho"]').disabled,'rerendered Jisho button reenabled');
   node('#f-de').value='ありがとう。';
   var callsBeforeNoKanji=calls.length;
   click('[data-field="kana"][data-act="suggest-pronunciation"]');
@@ -243,10 +257,16 @@ const smoke = String.raw`<script>
   click('[data-act="generate-phrases"]');
   click('[data-field="kana"][data-index="0"][data-act="suggest-pronunciation"]');
   check(calls.at(-1)[3]==='kana','draft requests only furigana');
+  check(calls.at(-1)[4]==='jisho','draft also offers Jisho first');
+  check(node('[data-field="kana"][data-provider="ai"][data-index="0"]').disabled,'draft AI cannot overlap Jisho');
   check(node('[data-field="pronunciation"][data-index="0"][data-act="suggest-pronunciation"]').disabled,'other draft button visibly disabled during request');
   var pendingCalls=calls.length;
   click('[data-field="pronunciation"][data-index="0"][data-act="suggest-pronunciation"]');
   check(calls.length===pendingCalls,'disabled draft button makes no request');
+  deferredPronunciation({pronunciation:'',kana:dictionaryFurigana});
+  check(node('#generated-kana-0').value===dictionaryFurigana,'draft fills dictionary forms');
+  click('[data-field="kana"][data-provider="ai"][data-index="0"]');
+  check(calls.at(-1)[4]==='ai','draft AI can replace Jisho');
   deferredPronunciation({pronunciation:'',kana:furigana});
   check(node('#generated-kana-0').value===furigana,'draft fills furigana');
   check(node('#generated-pronunciation-0').value==='','draft preserves empty romaji');

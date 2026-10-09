@@ -152,7 +152,7 @@
     loadingData: false, writingData:false,
     setup: null, language: {name:'alemán', locale:'de-DE', translation:{name:'español', locale:'es-ES'}, version:0}, languageChoice:'de-DE', customName:'', customLocale:'', configSaving:false, languageBusy:0, translationChoice:'es-ES', customTranslationName:'', customTranslationLocale:'', showPronunciation:true,
     items: [], view: 'manage', toolView:'print',
-    editing: null, editingCollectionIds: null, editingUpdated:'', phraseEditorSession:0, collectionEditorSession:0, managePage: 1, manageQuery: '', manageCollectionIds:[], importText: '',
+    editing: null, editingCollectionIds: null, editingUpdated:'', phraseEditorSession:0, phrasePronunciationBusy:false, collectionEditorSession:0, managePage: 1, manageQuery: '', manageCollectionIds:[], importText: '',
     importPreview: null, importHasHeader: true, importDelimiter: ',', importOpen:false, importColumns:{de:0, es:1, pronunciation:-1, kana:-1},
     generator: { context:'', level:'intermediate', generatedLevel:null, generatedLanguageVersion:null, items:[], collectionIds:[], busy:false, saving:false, debug:'' },
     etymologyText: '', etymologyResult: '', etymologyRequest:0,
@@ -193,13 +193,19 @@
     var prefix = generated ? 'generated-' : 'f-';
     var suffix = generated ? '-' + index : '';
     var review = item.pronunciationNeedsReview || {};
+    var busy = generated ? item.pronunciationBusy : state.phrasePronunciationBusy;
     function field(key, label) {
       var action = key === 'kana' ? 'furigana' : japanese_() ? 'romaji' : 'pronunciación';
+      function button(provider, text) {
+        return '<button class="ghost" data-act="suggest-pronunciation" data-field="' + key + '" data-provider="' + provider + '"' +
+          (generated ? ' data-index="' + index + '"' : '') + (busy ? ' disabled' : locked || '') + '>' +
+          (generated && busy === key + ':' + provider ? 'Sugiriendo…' : text) + '</button>';
+      }
       return '<div class="field"><label for="' + prefix + key + suffix + '">' + label + ' (opcional)</label><textarea id="' + prefix + key + suffix + '"' +
         (generated ? ' data-generator-field="' + key + '" data-index="' + index + '"' : '') + (locked || '') + '>' + esc(item[key]) + '</textarea>' +
-        (key === 'kana' ? '<p class="hint">Una sola línea: <code style="white-space:pre-wrap">日本語（にほんご）   ---   本（ほん）</code></p>' : '') +
-        '<div class="ai-actions"><button class="ghost" data-act="suggest-pronunciation" data-field="' + key + '"' + (generated ? ' data-index="' + index + '"' : '') +
-        (item.pronunciationBusy ? ' disabled' : locked || '') + '>' + (item.pronunciationBusy === key ? 'Sugiriendo…' : 'Sugerir ' + action + ' con IA') + '</button></div></div>';
+        (key === 'kana' ? '<p class="hint">Una sola línea: <code style="white-space:pre-wrap">日本語（にほんご）   ---   本（ほん）</code><br>Jisho: formas de diccionario. IA: formas conjugadas del original.</p>' : '') +
+        '<div class="ai-actions">' + (key === 'kana' ? button('jisho', 'Buscar furigana con Jisho') : '') +
+        button('ai', 'Sugerir ' + action + ' con IA') + '</div></div>';
     }
     return (japanese_() ? field('kana', 'Kanji con furigana') : '') +
       field('pronunciation', japanese_() ? 'Romaji' : 'Pronunciación / romanización') +
@@ -1298,10 +1304,11 @@
 
   function suggestPronunciation_(button) {
     var field = button.dataset.field || 'pronunciation';
+    var provider = button.dataset.provider || 'ai';
     var generated = button.dataset.index != null;
     var index = generated ? Number(button.dataset.index) : null;
     var item = generated ? state.generator.items[index] : null;
-    if (button.disabled || (item && (item.saved || item.pronunciationBusy || state.generator.busy))) return;
+    if (button.disabled || (generated ? item && (item.saved || item.pronunciationBusy || state.generator.busy) : state.phrasePronunciationBusy)) return;
     var source = generated ? null : document.getElementById('f-de');
     var target = generated ? null : document.getElementById('f-' + field);
     var text = generated ? item.de : source.value;
@@ -1310,15 +1317,24 @@
     var previous = generated ? item[field] : target.value;
     var languageVersion = state.language.version;
     var buttonLabel = button.textContent;
-    if (item) item.pronunciationBusy = field;
+    if (item) item.pronunciationBusy = field + ':' + provider;
+    else state.phrasePronunciationBusy = field + ':' + provider;
+    if (!generated) document.querySelectorAll('[data-act="suggest-pronunciation"]:not([data-index])').forEach(function (action) { action.disabled = true; });
     button.disabled = true;
     button.textContent = 'Sugiriendo…';
     state.languageBusy++;
     if (generated && state.view === 'generate') renderGenerator();
-    google.script.run.withSuccessHandler(function (result) {
+    function finish() {
       state.languageBusy--;
       if (item) item.pronunciationBusy = false;
+      else {
+        state.phrasePronunciationBusy = false;
+        document.querySelectorAll('[data-act="suggest-pronunciation"]:not([data-index])').forEach(function (action) { action.disabled = false; });
+      }
       restoreAiButton(button, buttonLabel);
+    }
+    google.script.run.withSuccessHandler(function (result) {
+      finish();
       if (languageVersion !== state.language.version) return;
       var unchanged = generated ? state.generator.items.indexOf(item) !== -1 && item.de === text && item[field] === previous :
         document.body.contains(button) && source.value === text && target.value === previous;
@@ -1338,12 +1354,10 @@
       if (warning) warning.hidden = !review.pronunciation && !review.kana;
       say('Ayuda sugerida. Revisala antes de guardar.');
     }).withFailureHandler(function (err) {
-      state.languageBusy--;
-      if (item) item.pronunciationBusy = false;
-      restoreAiButton(button, buttonLabel);
+      finish();
       if (generated && state.view === 'generate') renderGenerator();
       say(err.message, 'err');
-    }).suggestPronunciation(text, languageVersion, field);
+    }).suggestPronunciation(text, languageVersion, field, provider);
   }
 
   function restoreAiButton(button, label) {

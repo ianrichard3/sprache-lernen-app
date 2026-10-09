@@ -116,9 +116,21 @@ La IA responde sólo con la línea, sin introducciones, traducciones ni explicac
 Conserva las formas conjugadas completas
 y omite palabras escritas sólo en kana. Si el original no contiene kanji, la app
 avisa que no necesita furigana, conserva las ayudas existentes y no llama a la IA.
-**Sugerir romaji con IA** y **Sugerir furigana con IA** son botones independientes
-en el editor y en cada borrador de **Generar frases con IA**: cada uno pide y completa sólo
-su campo. Podés editar las ayudas y las sugerencias no guardan automáticamente.
+En el editor y en cada borrador de **Generar frases con IA**, el campo de furigana
+ofrece primero **Buscar furigana con Jisho** y después **Sugerir furigana con IA**.
+Jisho usa su API pública, sin clave Gemini, y muestra formas de diccionario:
+`組む（くむ）   ---   探す（さがす）`. La IA conserva las formas conjugadas del original:
+`組みたい（くみたい）   ---   探しています（さがしています）`.
+Si Jisho no encuentra alguna palabra o falla, conserva el campo actual y avisa;
+podés reintentar o elegir IA manualmente. Las lecturas de diccionario pueden ser
+ambiguas según el contexto: revisalas antes de guardar.
+Jisho separa palabras consecutivas en kanji y reconoce entradas con comienzos
+en hiragana, como `ひとり暮らし` → `一人暮らし（ひとりぐらし）`.
+La validación de IA contrasta los límites ambiguos de compuestos y expresiones
+con Jisho cuando está disponible; si falla, aplica límites conservadores.
+**Sugerir romaji con IA** completa sólo el romaji. Podés editar ambas ayudas y las
+sugerencias no guardan automáticamente. Durante una consulta se bloquean los botones
+de pronunciación de esa frase para evitar respuestas superpuestas.
 La columna existente se reutiliza: las lecturas anteriores se conservan hasta
 volver a sugerirlas y guardar. Para otros idiomas,
 se pide la romanización convencional, como pinyin con tonos para mandarín.
